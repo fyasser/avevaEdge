@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "mssql": "^11.0.1"
+    "chart.js": "^4.4.9",
+    "mssql": "^11.0.1",
+    "react-chartjs-2": "^5.3.0"
   }
 }
