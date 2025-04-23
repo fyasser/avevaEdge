@@ -1,8 +1,12 @@
 const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
 const sql = require('mssql'); // Import the mssql package
 const cors = require('cors'); // Import the cors package
 
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server);
 const PORT = 5000; // Updated port to 5000
 
 // Database configuration
@@ -38,6 +42,14 @@ const poolPromise = new sql.ConnectionPool(config)
 // Middleware
 app.use(express.json());
 app.use(cors()); // Enable CORS
+
+io.on('connection', (socket) => {
+  console.log('Client connected');
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
+});
 
 // Test route to verify database connection
 app.get('/', async (req, res) => {
@@ -80,7 +92,25 @@ app.get('/api/data', async (req, res) => {
     }
 });
 
+app.post('/generate-report', (req, res) => {
+  const { startDate, endDate, chartTypes } = req.body;
+
+  // Simulate report generation
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += 20;
+    io.emit('report-progress', { progress });
+
+    if (progress >= 100) {
+      clearInterval(interval);
+      io.emit('report-complete', { message: 'Report generation complete!' });
+    }
+  }, 1000);
+
+  res.status(200).send({ message: 'Report generation started' });
+});
+
 // Start the server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });

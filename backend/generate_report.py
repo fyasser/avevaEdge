@@ -7,6 +7,10 @@ import pyodbc
 import matplotlib.pyplot as plt
 import io
 from reportlab.lib.utils import ImageReader
+from datetime import datetime
+import json
+from flask import Flask, request, send_file
+from fpdf import FPDF
 
 # Database connection configuration
 DB_CONFIG = {
@@ -101,64 +105,134 @@ def generate_pdf(df, filename="report.pdf"):
     c = canvas.Canvas(filename, pagesize=letter)
     width, height = letter
 
-    # Add header and footer
-    add_header_footer(c, width, height)
+    # Add header with dynamic date and time
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(30, height - 50, "Trend Data Report")
+    c.setFont("Helvetica", 10)
+    c.drawString(30, height - 65, f"Generated on: {datetime.now().strftime('%B %d, %Y %H:%M:%S')}")
 
-    # Summary Statistics
+    # Add summary section
     avg_flow = df['rTotalQ'].mean()
     max_flow = df['rTotalQ'].max()
     min_flow = df['rTotalQ'].min()
-    avg_percentage = df['rTotalQPercentage'].mean()
-    max_percentage = df['rTotalQPercentage'].max()
-    min_percentage = df['rTotalQPercentage'].min()
+    avg_pressure = df['rTotalQPercentage'].mean()
+    max_pressure = df['rTotalQPercentage'].max()
+    min_pressure = df['rTotalQPercentage'].min()
 
     c.setFont("Helvetica", 12)
-    c.setFillColor(colors.black)
-    c.drawString(50, height - 100, f"Average Flow: {avg_flow:.2f}")
-    c.drawString(50, height - 120, f"Max Flow: {max_flow:.2f}")
-    c.drawString(50, height - 140, f"Min Flow: {min_flow:.2f}")
-    c.drawString(50, height - 160, f"Average Percentage: {avg_percentage:.2f}")
-    c.drawString(50, height - 180, f"Max Percentage: {max_percentage:.2f}")
-    c.drawString(50, height - 200, f"Min Percentage: {min_percentage:.2f}")
+    c.drawString(30, height - 100, f"Average Flow: {avg_flow:.2f}")
+    c.drawString(30, height - 115, f"Max Flow: {max_flow:.2f}")
+    c.drawString(30, height - 130, f"Min Flow: {min_flow:.2f}")
+    c.drawString(30, height - 145, f"Average Pressure: {avg_pressure:.2f}")
+    c.drawString(30, height - 160, f"Max Pressure: {max_pressure:.2f}")
+    c.drawString(30, height - 175, f"Min Pressure: {min_pressure:.2f}")
 
-    # Generate Visualizations
-    flow_chart, scatter_chart, bar_chart = generate_visualizations(df.values.tolist())
+    # Add charts to the PDF
+    flow_chart = io.BytesIO()
+    plt.figure(figsize=(6, 4))
+    plt.plot(df['Time_Stamp'], df['rTotalQ'], label='Flow', color='blue')
+    plt.title('Flow Over Time')
+    plt.xlabel('Time')
+    plt.ylabel('Flow')
+    plt.legend()
+    plt.savefig(flow_chart, format='png')
+    flow_chart.seek(0)
+    plt.close()
 
-    # Add Visualizations to PDF
-    c.drawImage(ImageReader(flow_chart), 50, height - 400, width=500, height=150)
-    c.drawImage(ImageReader(scatter_chart), 50, height - 600, width=500, height=150)
-    c.showPage()
+    c.drawImage(ImageReader(flow_chart), 30, height - 400, width=500, height=150)
 
-    # Add Bar Chart on a new page
-    add_header_footer(c, width, height)
-    c.drawImage(ImageReader(bar_chart), 50, height - 200, width=500, height=300)
-    c.showPage()
-
-    # Table data
+    # Add table with improved formatting
     table_data = [df.columns.tolist()] + df.values.tolist()
-
-    # Create table
     table = Table(table_data, colWidths=[100] * len(df.columns))
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.lightgrey),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
     ]))
 
-    # Adjust table position and handle page overflow
-    x_offset = 50
-    y_offset = height - 100  # Adjust for margins and title
-
     table.wrapOn(c, width, height)
-    table.drawOn(c, x_offset, y_offset - table._height)
+    table.drawOn(c, 30, height - 600)
 
-    # Save PDF
+    # Add page numbers
+    c.drawString(30, 20, f"Page {c.getPageNumber()}")
+
     c.save()
     print(f"Report saved as {filename}")
+
+app = Flask(__name__)
+
+@app.route('/generate-report', methods=['POST'])
+def generate_report():
+    data = request.json
+    start_date = data.get('startDate')
+    end_date = data.get('endDate')
+    chart_types = data.get('chartTypes', [])
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font('Arial', 'B', 16)
+    pdf.cell(40, 10, 'Aveva Report')
+    pdf.ln(10)
+    pdf.set_font('Arial', '', 12)
+    pdf.cell(40, 10, f'Date Range: {start_date} to {end_date}')
+    pdf.ln(10)
+
+    for chart in chart_types:
+        pdf.cell(40, 10, f'Included Chart: {chart}')
+        pdf.ln(10)
+
+    pdf.output('report.pdf')
+    return send_file('report.pdf', as_attachment=True)
+
+@app.route('/download-html', methods=['GET'])
+def download_html():
+    """Endpoint to download the entire page's functionality as an HTML file."""
+    html_content = """<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Aveva Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        select, button {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>Aveva Report</h1>
+    <form>
+        <label for='chartType'>Select Chart Types:</label>
+        <select name='chartType' multiple style='width: 100%;'>
+            <option value='line'>Line Chart</option>
+            <option value='scatter'>Scatter Chart</option>
+            <option value='radar'>Radar Chart</option>
+            <option value='doughnut'>Doughnut Chart</option>
+        </select>
+        <br>
+        <button type='submit'>Generate Report</button>
+    </form>
+</body>
+</html>"""
+
+    with open('page.html', 'w', encoding='utf-8') as file:
+        file.write(html_content)
+
+    return send_file('page.html', as_attachment=True)
+
+if __name__ == '__main__':
+    app.run(debug=True)
 
 if __name__ == "__main__":
     print("Fetching data from the database...")

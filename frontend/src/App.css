@@ -1,5 +1,34 @@
+/* Adjusted the page dimensions to match Google Chrome's default size */
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: auto; /* Prevent scrollbars */
+}
+
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: #f4f4f4;
+  color: #333;
+}
+
+/* Updated layout to make components independent of each other */
 .App {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  max-width: 1366px;
+  max-height: 768px;
+  margin: 0 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  /* Removed border */
 }
 
 .App-logo {
@@ -14,14 +43,21 @@
 }
 
 .App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+  width: 100%;
+  text-align: center;
+  padding: 20px;
+  background-color: #4CAF50;
   color: white;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.App-header h1 {
+  font-family: 'Arial', sans-serif;
+  font-size: 3rem; /* Increase size */
+  font-weight: 900; /* Increase boldness */
+  color: #ffffff;
 }
 
 .App-link {
@@ -35,4 +71,208 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+.chart-container {
+  display: flex;
+  flex-direction: row; /* Horizontal layout */
+  overflow-x: auto; /* Enable horizontal scrolling */
+  scroll-snap-type: x mandatory; /* Snap to each chart */
+  gap: 20px;
+  padding: 10px;
+  /* Removed border */
+}
+
+.chart-box {
+  flex: 0 0 100%; /* Each chart takes up 100% of the container width */
+  min-width: 100%; /* Ensure each chart is full width */
+  height: 400px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 10px;
+  scroll-snap-align: center; /* Snap to the center of the viewport */
+  /* Removed border */
+}
+
+.table-container {
+  flex: 1;
+  height: 1100px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  margin: 5px auto;
+  width: 110%;
+  padding: 20px;
+  /* Removed border */
+}
+
+.table-container h2 {
+  font-family: 'Arial', sans-serif;
+  font-size: 2rem; /* Increase size */
+  font-weight: 700; /* Increase boldness */
+  color: #333333;
+  margin-bottom: 10px;
+}
+
+.table-container table {
+  width: 110%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.table-container th, .table-container td {
+  border: none;
+  padding: 12px 15px;
+  text-align: left;
+}
+
+.table-container th {
+  background-color: #282c34;
+  color: white;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.table-container tr:nth-child(even) {
+  background-color: #f4f4f4;
+}
+
+.table-container tr:hover {
+  background-color: #e0e0e0;
+}
+
+.table-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.table-controls input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 200px;
+}
+
+.table-controls select {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.pagination-controls button {
+  padding: 8px 12px;
+  border: none;
+  background-color: #282c34;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pagination-controls button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.pagination-controls span {
+  font-size: 14px;
+}
+
+button {
+  background-color: #0078d4; /* Aveva accent color */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #005a9e;
+}
+
+/* Adjusted layout to ensure components are visible and not overlapping */
+.App-content {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  padding: 20px;
+  gap: 20px;
+  box-sizing: border-box;
+}
+
+.App-main-content {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow: auto;
+}
+
+.App-form {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  box-sizing: border-box;
+  /* Removed border */
+}
+
+.App-form h2 {
+  color: #4CAF50;
+  margin-bottom: 10px;
+}
+
+.App-form label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: bold;
+}
+
+.App-form input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+.App-form input[type="date"] {
+  margin-left: 5px;
+  padding: 5px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+.App-form button {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.App-form button:hover {
+  background-color: #45a049;
+}
+
+.App-main-content {
+  flex: 1;
+  background-color: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 5px;
+  padding: 15px;
 }
