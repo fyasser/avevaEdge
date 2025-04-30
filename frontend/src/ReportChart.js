@@ -1,135 +1,230 @@
-import React from 'react';
-import { Bar, Line, Radar, Doughnut, Scatter } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
+import React, { useRef, useEffect } from 'react';
+import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
+import { format } from 'date-fns';
+import { 
+  registerChart, 
+  unregisterChart,
+  patchChartInstance,
+  installGlobalErrorPrevention
+} from './utils/chartInstanceManager';
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
-);
+// Install global error prevention once when this module is imported
+installGlobalErrorPrevention();
 
-const ReportChart = ({ type, data, options }) => {
-  // Added debugging logs to verify chart data passed to ReportChart
-  console.log('Rendering ReportChart with data:', data);
+const ReportChart = ({ 
+  data, 
+  type = 'bar', 
+  xField = 'Time_Stamp', 
+  yField = 'rTotalQ', 
+  title = '',
+  style = {},
+  options = {}
+}) => {
+  const chartRef = useRef(null);
+  const chartId = useRef(null);
+  const componentId = `ReportChart-${xField}-${yField}`;
 
-  // Handle scatter chart data without labels
-  if (type === 'scatter' && (!data || !data.datasets)) {
-    console.error('Invalid scatter chart data:', data);
-    return <div>No data available for the scatter chart.</div>;
-  }
+  // Handle chart cleanup on unmount or data/type change
+  useEffect(() => {
+    return () => {
+      if (chartId.current) {
+        console.log(`ReportChart: Cleaning up chart ${chartId.current}`);
+        unregisterChart(chartId.current);
+        chartId.current = null;
+      }
+    };
+  }, [data, type]);
 
-  if (!data || (!data.labels && type !== 'scatter') || !data.datasets) {
-    console.error('Invalid data passed to ReportChart:', data);
-    return <div>No data available for the chart.</div>;
-  }
-
-  // Updated chart design to be more minimalistic
-  const optionsMinimalistic = {
-    responsive: true,
-    plugins: {
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)', // Subtle dark background for tooltips
-        titleFont: {
-          size: 12,
-          family: 'Arial, sans-serif',
-        },
-        bodyFont: {
-          size: 10,
-          family: 'Arial, sans-serif',
-        },
-      },
-      legend: {
-        display: false, // Removed legend for a cleaner look
-      },
-    },
-    hover: {
-      mode: 'nearest',
-      intersect: true,
-    },
-    scales: {
-      x: {
-        display: true,
-        grid: {
-          display: false, // Removed grid lines for minimalism
-        },
-        title: {
-          display: false, // Removed axis title for simplicity
-        },
-        ticks: {
-          color: '#6c757d', // Subtle gray for ticks
-          font: {
-            size: 10,
-            family: 'Arial, sans-serif',
-          },
-        },
-      },
-      y: {
-        display: true,
-        grid: {
-          color: 'rgba(200, 200, 200, 0.2)', // Light grid lines
-        },
-        title: {
-          display: false, // Removed axis title for simplicity
-        },
-        ticks: {
-          color: '#6c757d', // Subtle gray for ticks
-          font: {
-            size: 10,
-            family: 'Arial, sans-serif',
-          },
-        },
-      },
-    },
+  // Handle chart instance registration after component mount
+  const handleChartRef = (ref) => {
+    // Save reference
+    chartRef.current = ref;
+    
+    // If there's already a chart ID, clean it up first
+    if (chartId.current) {
+      unregisterChart(chartId.current);
+    }
+    
+    // Register the new chart instance
+    if (ref?.chart) {
+      chartId.current = registerChart(ref.chart, componentId);
+      
+      // Apply safety patches
+      patchChartInstance(ref.chart);
+      console.log(`ReportChart: Registered chart with ID ${chartId.current}`);
+    }
   };
 
-  const minimalisticColors = [
-    'rgba(78, 115, 223, 0.6)', // Blue
-    'rgba(28, 200, 138, 0.6)', // Green
-    'rgba(54, 185, 204, 0.6)', // Cyan
-    'rgba(246, 194, 62, 0.6)', // Yellow
-    'rgba(231, 74, 59, 0.6)', // Red
-  ];
+  // Prepare chart data based on input data
+  const prepareChartData = () => {
+    // Handle empty data
+    if (!data || data.length === 0) {
+      return {
+        labels: ['No Data'],
+        datasets: [{ 
+          label: 'No Data Available',
+          data: [0],
+          backgroundColor: 'rgba(200, 200, 200, 0.5)',
+          borderColor: 'rgba(200, 200, 200, 1)'
+        }]
+      };
+    }
+    
+    let chartData;
+    
+    if (type === 'line') {
+      chartData = {
+        labels: data.map(item => format(new Date(item[xField]), 'MMM dd HH:mm')),
+        datasets: [{
+          label: title || `${yField} Over Time`,
+          data: data.map(item => item[yField]),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 7,
+        }]
+      };
+    } else if (type === 'bar') {
+      chartData = {
+        labels: data.map(item => format(new Date(item[xField]), 'MMM dd HH:mm')),
+        datasets: [{
+          label: title || yField,
+          data: data.map(item => item[yField]),
+          backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1,
+        }]
+      };
+    } else if (type === 'doughnut') {
+      // Get unique categories and count values
+      const categories = {};
+      data.forEach(item => {
+        const category = item[xField];
+        if (!categories[category]) {
+          categories[category] = 0;
+        }
+        categories[category] += parseFloat(item[yField] || 0);
+      });
+      
+      chartData = {
+        labels: Object.keys(categories),
+        datasets: [{
+          data: Object.values(categories),
+          backgroundColor: [
+            'rgba(75, 192, 192, 0.6)',
+            'rgba(54, 162, 235, 0.6)',
+            'rgba(255, 99, 132, 0.6)',
+            'rgba(255, 206, 86, 0.6)',
+            'rgba(153, 102, 255, 0.6)',
+            'rgba(255, 159, 64, 0.6)'
+          ],
+          borderColor: [
+            'rgba(75, 192, 192, 1)',
+            'rgba(54, 162, 235, 1)',
+            'rgba(255, 99, 132, 1)',
+            'rgba(255, 206, 86, 1)',
+            'rgba(153, 102, 255, 1)',
+            'rgba(255, 159, 64, 1)'
+          ],
+          borderWidth: 1,
+          hoverOffset: 12,
+        }]
+      };
+    } else if (type === 'scatter') {
+      chartData = {
+        datasets: [{
+          label: title || `${xField} vs ${yField}`,
+          data: data.map(item => ({ 
+            x: item[xField],
+            y: item[yField],
+            timestamp: format(new Date(item.Time_Stamp), 'MMM dd HH:mm')
+          })),
+          backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          pointRadius: 5,
+          pointHoverRadius: 8,
+          pointBorderColor: 'rgba(75, 192, 192, 1)',
+          pointHoverBackgroundColor: '#fff',
+        }]
+      };
+    }
+    
+    return chartData;
+  };
 
-  // Apply minimalistic colors to datasets
-  if (data && data.datasets) {
-    data.datasets.forEach((dataset, index) => {
-      dataset.backgroundColor = minimalisticColors[index % minimalisticColors.length];
-      dataset.borderColor = minimalisticColors[index % minimalisticColors.length].replace('0.6', '1');
-      dataset.borderWidth = 1; // Thinner borders for minimalism
-    });
-  }
+  // Common chart options with good defaults
+  const defaultOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    resizeDelay: 200, // Reduce resize events frequency
+    animation: {
+      duration: 0 // Disable animation to prevent resize issues
+    },
+    plugins: {
+      title: {
+        display: !!title,
+        text: title,
+        font: {
+          size: 16,
+          weight: 'bold'
+        }
+      },
+      legend: {
+        display: true,
+        position: 'top',
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: 'rgba(75, 192, 192, 1)',
+        borderWidth: 1,
+        padding: 10,
+        displayColors: true,
+      }
+    },
+    scales: type !== 'doughnut' ? {
+      x: {
+        grid: {
+          display: true,
+          color: 'rgba(0, 0, 0, 0.05)'
+        }
+      },
+      y: {
+        grid: {
+          display: true,
+          color: 'rgba(0, 0, 0, 0.05)'
+        },
+        beginAtZero: false
+      }
+    } : undefined // No scales for doughnut charts
+  };
+  
+  const chartOptions = { ...defaultOptions, ...options };
+  const chartData = prepareChartData();
+  
+  // Render proper chart type
+  const renderChart = () => {
+    switch (type) {
+      case 'line':
+        return <Line data={chartData} options={chartOptions} ref={handleChartRef} />;
+      case 'bar':
+        return <Bar data={chartData} options={chartOptions} ref={handleChartRef} />;
+      case 'doughnut':
+        return <Doughnut data={chartData} options={chartOptions} ref={handleChartRef} />;
+      case 'scatter':
+        return <Scatter data={chartData} options={chartOptions} ref={handleChartRef} />;
+      default:
+        return <Bar data={chartData} options={chartOptions} ref={handleChartRef} />;
+    }
+  };
 
-  switch (type) {
-    case 'line':
-      return <Line data={data} options={optionsMinimalistic} />;
-    case 'radar':
-      return <Radar data={data} options={options} />;
-    case 'doughnut':
-      return <Doughnut data={data} options={options} />;
-    case 'scatter':
-      return <Scatter data={data} options={optionsMinimalistic} />;
-    default:
-      return <Bar data={data} options={optionsMinimalistic} />;
-  }
+  return (
+    <div style={{ width: '100%', height: '300px', ...style }}>
+      {renderChart()}
+    </div>
+  );
 };
 
 export default ReportChart;

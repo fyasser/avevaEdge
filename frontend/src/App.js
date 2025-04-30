@@ -1,9 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ReportChart from './ReportChart';
 import './App.css';
 import { format } from 'date-fns';
 import { saveAs } from 'file-saver';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
+import io from 'socket.io-client';
+import { 
+  destroyAllCharts, 
+  installGlobalErrorPrevention 
+} from './utils/chartInstanceManager';
 
 import {
   Chart as ChartJS,
@@ -14,303 +19,1548 @@ import {
   Tooltip,
   Legend,
   ArcElement,
-  RadialLinearScale,
   PointElement,
   LineElement,
+  Filler, // Added the missing Filler import
 } from 'chart.js';
 
 import ChartCarousel from './ChartCarousel';
 import DataTable from './DataTable';
 import FilterOptions from './FilterOptions';
+import InsightGenerator from './InsightGenerator';
+import './InsightGenerator.css';
 
+// Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  PointElement,
+  LineElement,
   BarElement,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
-  ArcElement, 
-  RadialLinearScale,
-  PointElement, 
-  LineElement 
+  Filler
 );
+
+// Install global error prevention as early as possible
+installGlobalErrorPrevention();
 
 function App() {
   const [chartData, setChartData] = useState(null);
   const [tableData, setTableData] = useState([]);
-  const [radarChartData, setRadarChartData] = useState(null);
   const [doughnutChartData, setDoughnutChartData] = useState(null);
   const [lineChartData, setLineChartData] = useState(null);
   const [scatterChartData, setScatterChartData] = useState(null);
+  const [chartRenderKey, setChartRenderKey] = useState(Date.now()); // Key for forcing chart rerenders
   const [selectedCharts, setSelectedCharts] = useState({
-    radar: false,
-    doughnut: false,
-    line: false,
-    scatter: false,
+    radar: true,
+    doughnut: true,
+    line: true,
+    scatter: true
   });
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  
+  // Initialize with empty date range to prevent auto-loading
+  const [dateRange, setDateRange] = useState({ 
+    start: '', 
+    end: '' 
+  });
+  
+  const [dataFilters, setDataFilters] = useState({
+    filterField: 'rTotalQ',
+    minValue: '',
+    maxValue: '',
+    threshold: '',
+    comparisonOperator: 'gt'
+  });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);  // Don't start loading until user initiates it
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false); // Track if user has loaded data
 
+  const [metrics, setMetrics] = useState({
+    totalFlow: 0,
+    totalPressure: 0,
+    activeSensors: 0,
+    systemEfficiency: '0%'
+  });
+
+  // Reference to socket.io connection
+  const socketRef = useRef(null);
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
+  };
+
+  // Set up Socket.IO connection for real-time data updates
   useEffect(() => {
-    fetch('http://localhost:5000/api/trend-data')
-      .then((response) => response.json())
-      .then((data) => {
-        const formattedChartData = {
-          labels: data.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')), // Minimal timestamp format
-          datasets: [
-            {
-              label: 'Flow',
-              data: data.map((item) => item.rTotalQ),
-              backgroundColor: 'rgba(75, 192, 192, 0.6)',
-            },
-          ],
-        };
-        setChartData(formattedChartData);
+    // Initialize Socket.IO connection
+    socketRef.current = io('http://localhost:5000');
+    
+    // Connection event
+    socketRef.current.on('connect', () => {
+      console.log('Connected to server via Socket.IO');
+      setIsConnected(true);
+      
+      // IMPORTANT: Don't send or request any data initially
+      // This prevents the automatic loading of all 6000 entries
+    });
+    
+    // Disconnection event
+    socketRef.current.on('disconnect', () => {
+      console.log('Disconnected from server');
+      setIsConnected(false);
+    });
+    
+    // Handle initial data load - only triggered when user applies filters
+    socketRef.current.on('initial-data', (data) => {
+      console.log('Received initial data:', data.length, 'records');
+      
+      if (data.length > 0) {
+        console.log('Sample data record:', data[0]);
+        updateAllChartData(data);
+        setLastUpdate(new Date());
         setTableData(data);
-
-        const formattedPieChartData = {
-          labels: ['Counter', 'Flow', 'Pressure'],
-          datasets: [
-            {
-              data: [
-                data.reduce((sum, item) => sum + item.counter, 0),
-                data.reduce((sum, item) => sum + item.rTotalQ, 0),
-                data.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
-              ],
-              backgroundColor: [
-                'rgba(255, 99, 132, 0.6)',
-                'rgba(54, 162, 235, 0.6)',
-                'rgba(255, 206, 86, 0.6)',
-              ],
-              borderColor: [
-                'rgba(255, 99, 132, 1)',
-                'rgba(54, 162, 235, 1)',
-                'rgba(255, 206, 86, 1)',
-              ],
-              borderWidth: 1,
-            },
-          ],
-        };
-        setRadarChartData(formattedPieChartData);
-
-        const formattedDoughnutChartData = {
-          labels: ['counter', 'flow', 'pressure'],
-          datasets: [
-            {
-              data: [
-                data.reduce((sum, item) => sum + item.counter, 0),
-                data.reduce((sum, item) => sum + item.rTotalQ, 0),
-                data.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
-              ],
-              backgroundColor: [
-                'rgba(255, 99, 132, 0.6)',
-                'rgba(54, 162, 235, 0.6)',
-                'rgba(255, 206, 86, 0.6)',
-              ],
-            },
-          ],
-        };
-
-        const formattedLineChartData = {
-          labels: data.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')), // Minimal timestamp format
-          datasets: [
-            {
-              label: 'Flow Over Time',
-              data: data.map((item) => item.rTotalQ),
-              borderColor: 'rgba(75, 192, 192, 1)',
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              fill: true,
-            },
-            {
-              label: 'Pressure Over Time',
-              data: data.map((item) => item.rTotalQPercentage),
-              borderColor: 'rgba(255, 99, 132, 1)',
-              backgroundColor: 'rgba(255, 99, 132, 0.2)',
-              fill: true,
-            },
-          ],
-        };
-
-        const formattedScatterChartData = {
-          datasets: [
-            {
-              label: 'Flow vs Pressure',
-              data: data.map((item) => ({ x: item.rTotalQ, y: item.rTotalQPercentage })),
-              backgroundColor: 'rgba(54, 162, 235, 0.6)',
-            },
-          ],
-        };
-
-        setDoughnutChartData(formattedDoughnutChartData);
-        setLineChartData(formattedLineChartData);
-        setScatterChartData(formattedScatterChartData);
-      })
-      .catch((error) => console.error('Error fetching data:', error));
-  }, []);
-
-  useEffect(() => {
+        setInitialLoadComplete(true);
+      } else {
+        console.log('No data returned from server for the selected filters');
+        // Clear any existing data when filters return no results
+        setTableData([]);
+        // Set empty chart data
+        setEmptyChartData();
+      }
+      
+      setIsLoading(false);
+    });
+    
+    // Handle new data updates
+    socketRef.current.on('new-data', (newData) => {
+      if (newData.length > 0) {
+        console.log('Received new data:', newData.length, 'records');
+        
+        // Update the table data with new records
+        setTableData(prevData => {
+          // Combine new data with existing, avoiding duplicates by using a Map
+          const dataMap = new Map();
+          
+          // Add existing data to map (keyed by timestamp)
+          prevData.forEach(item => {
+            const key = new Date(item.Time_Stamp).getTime();
+            dataMap.set(key, item);
+          });
+          
+          // Add/overwrite with new data
+          newData.forEach(item => {
+            const key = new Date(item.Time_Stamp).getTime();
+            dataMap.set(key, item);
+          });
+          
+          // Convert back to array and sort by timestamp (newest first)
+          const updatedData = Array.from(dataMap.values())
+            .sort((a, b) => new Date(b.Time_Stamp) - new Date(a.Time_Stamp));
+            
+          // Update all charts with the new combined data
+          updateAllChartData(updatedData);
+          setLastUpdate(new Date());
+          
+          return updatedData;
+        });
+      }
+    });
+    
+    // Clean up socket connection on component unmount
     return () => {
-      Object.keys(ChartJS.instances).forEach((id) => {
-        const chart = ChartJS.getChart(id);
-        if (chart) {
-          chart.destroy();
-        }
-      });
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
     };
   }, []);
 
-  useEffect(() => {
-    console.log('Chart Data:', chartData);
-    console.log('Radar Chart Data:', radarChartData);
-    console.log('Doughnut Chart Data:', doughnutChartData);
-    console.log('Line Chart Data:', lineChartData);
-    console.log('Scatter Chart Data:', scatterChartData);
-  }, [chartData, radarChartData, doughnutChartData, lineChartData, scatterChartData]);
+  // Helper function to send current filter settings to the server
+  const sendFilterSettings = () => {
+    if (socketRef.current && socketRef.current.connected) {
+      // Only send filters if date range is set
+      if (!dateRange.start || !dateRange.end) {
+        console.log('Date range not set, not sending filter settings');
+        return;
+      }
+      
+      // Combine all filter settings
+      const filters = {
+        ...dateRange,
+        ...dataFilters,
+        selectedCharts
+      };
+      
+      // Send to server
+      socketRef.current.emit('update-filters', filters);
+      console.log('Sent filter settings to server:', filters);
+    } else {
+      console.warn('Socket not connected, cannot send filter settings');
+    }
+  };
 
-  // Temporary static data for testing
-  useEffect(() => {
-    const staticChartData = {
-      labels: ['January', 'February', 'March'],
+  // Function to set empty chart data structures
+  const setEmptyChartData = () => {
+    // Empty bar chart
+    setChartData({
+      labels: [],
+      datasets: [{
+        label: 'Flow',
+        data: [],
+        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+      }]
+    });
+    
+    // Empty doughnut chart
+    setDoughnutChartData({
+      labels: ['System Efficiency', 'Flow', 'Pressure'],
+      datasets: [{
+        data: [0, 0, 0],
+        backgroundColor: [
+          'rgba(54, 162, 235, 0.6)',
+          'rgba(75, 192, 192, 0.6)',
+          'rgba(255, 99, 132, 0.6)',
+        ],
+      }]
+    });
+    
+    // Empty line chart
+    setLineChartData({
+      labels: [],
       datasets: [
         {
-          label: 'Static Dataset',
-          data: [10, 20, 30],
-          backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          label: 'Flow Over Time',
+          data: [],
           borderColor: 'rgba(75, 192, 192, 1)',
-          borderWidth: 1,
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          fill: true,
+        },
+        {
+          label: 'Pressure Over Time',
+          data: [],
+          borderColor: 'rgba(255, 99, 132, 1)',
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          fill: true,
+        }
+      ]
+    });
+    
+    // Empty scatter chart
+    setScatterChartData({
+      datasets: [
+        {
+          label: 'Flow vs Pressure (size: System Efficiency)',
+          data: [],
+          backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+      ]
+    });
+    
+    // Reset metrics
+    setMetrics({
+      totalFlow: '0.00',
+      totalPressure: '0.00',
+      activeSensors: 0,
+      systemEfficiency: '0.00%'
+    });
+  };
+
+  // Initialize with empty charts
+  useEffect(() => {
+    setEmptyChartData();
+  }, []);
+
+  // Function to update all chart types with new data
+  const updateAllChartData = (data) => {
+    // Ensure data is not empty
+    if (!data || data.length === 0) {
+      console.log('No data to update charts');
+      setEmptyChartData();
+      return;
+    }
+
+    // Update Bar Chart data
+    const formattedChartData = {
+      labels: data.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
+      datasets: [
+        {
+          label: 'Flow',
+          data: data.map((item) => item.rTotalQ),
+          backgroundColor: 'rgba(75, 192, 192, 0.6)',
         },
       ],
     };
-
-    setChartData(staticChartData);
-    setRadarChartData(staticChartData);
-    setDoughnutChartData(staticChartData);
-    setLineChartData(staticChartData);
-    setScatterChartData(staticChartData);
-  }, []);
-
-  // Ensure proper rendering by checking all chart data
-  if (!chartData || !radarChartData || !doughnutChartData || !lineChartData || !scatterChartData) {
-    return <div>Loading charts...</div>;
-  }
-
-  // Simplified rendering to test a single chart with static data
-  const staticChartData = {
-    labels: ['January', 'February', 'March'],
-    datasets: [
-      {
-        label: 'Static Dataset',
-        data: [10, 20, 30],
-        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1,
-      },
-    ],
+    setChartData(formattedChartData);
+    
+    // Update Doughnut Chart data - renamed sensors to System Efficiency
+    const formattedDoughnutChartData = {
+      labels: ['System Efficiency', 'Flow', 'Pressure'],
+      datasets: [
+        {
+          data: [
+            data.reduce((sum, item) => sum + item.counter, 0),
+            data.reduce((sum, item) => sum + item.rTotalQ, 0),
+            data.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
+          ],
+          backgroundColor: [
+            'rgba(54, 162, 235, 0.6)', // Blue for System Efficiency
+            'rgba(75, 192, 192, 0.6)', // Green for Flow
+            'rgba(255, 99, 132, 0.6)', // Red for Pressure
+          ],
+        },
+      ],
+    };
+    setDoughnutChartData(formattedDoughnutChartData);
+    
+    // Update Line Chart data with renamed labels and removing System Efficiency
+    const formattedLineChartData = {
+      labels: data.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
+      datasets: [
+        {
+          label: 'Flow',
+          data: data.map((item) => item.rTotalQ),
+          borderColor: 'rgba(75, 192, 192, 1)',
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          fill: true,
+        },
+        {
+          label: 'Pressure',
+          data: data.map((item) => item.rTotalQPercentage),
+          borderColor: 'rgba(255, 99, 132, 1)',
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          fill: true,
+        }
+      ],
+    };
+    setLineChartData(formattedLineChartData);
+    
+    // Update Scatter Chart data to compare Flow vs Pressure with System Efficiency as point size
+    const formattedScatterChartData = {
+      datasets: [
+        {
+          label: 'Flow vs Pressure (size: System Efficiency)',
+          data: data.map((item) => ({
+            x: item.rTotalQ,
+            y: item.rTotalQPercentage,
+            r: Math.max(3, Math.min(10, item.counter / 10)), // Size based on System Efficiency (scaled)
+            efficiency: item.counter,
+            timestamp: format(new Date(item.Time_Stamp), 'MMM dd HH:mm:ss')
+          })),
+          backgroundColor: data.map(item => {
+            // Color points based on efficiency (more efficient = more blue)
+            const efficiency = item.counter;
+            if (efficiency > 75) {
+              return 'rgba(0, 153, 255, 0.7)'; // High efficiency - blue
+            } else if (efficiency > 50) {
+              return 'rgba(46, 204, 113, 0.7)'; // Medium efficiency - green
+            } else if (efficiency > 25) {
+              return 'rgba(255, 195, 0, 0.7)'; // Low efficiency - yellow
+            } else {
+              return 'rgba(255, 87, 51, 0.7)'; // Very low efficiency - red
+            }
+          }),
+          pointRadius: data.map(item => Math.max(3, Math.min(10, item.counter / 10))),
+          pointHoverRadius: data.map(item => Math.max(5, Math.min(15, item.counter / 8))),
+        },
+      ],
+    };
+    setScatterChartData(formattedScatterChartData);
+    
+    // Calculate and update metrics
+    const totalFlow = data.reduce((sum, item) => sum + item.rTotalQ, 0);
+    const totalPressure = data.reduce((sum, item) => sum + item.rTotalQPercentage, 0);
+    const avgSystemEfficiency = data.length > 0 ? 
+      data.reduce((sum, item) => sum + item.counter, 0) / data.length : 0;
+    
+    setMetrics({
+      totalFlow: totalFlow.toFixed(2),
+      totalPressure: totalPressure.toFixed(2),
+      systemEfficiency: avgSystemEfficiency.toFixed(2) + '%',
+      activeSensors: data.reduce((max, item) => Math.max(max, item.counter), 0) // Use max counter as sensor count
+    });
   };
 
-  // Restored filtering and report download logic
+  // Updated to fetch data based on current filter settings
+  const fetchFilteredData = (additionalFilters = {}) => {
+    // Validate date range before fetching
+    if (!dateRange.start || !dateRange.end) {
+      alert('Please select both start and end dates to load data.');
+      return;
+    }
+    
+    // Use our chart instance manager to properly clean up all chart instances
+    // This prevents "Cannot read properties of null (reading 'ownerDocument')" errors
+    destroyAllCharts();
+    
+    // Force chart rerenders with a new key
+    setChartRenderKey(Date.now());
+    
+    setIsLoading(true);
+    
+    // If socket is connected, use socket for data updates
+    if (socketRef.current && socketRef.current.connected) {
+      // Update client filter settings
+      const combinedFilters = {
+        ...dateRange,
+        ...dataFilters,
+        ...additionalFilters,
+        selectedCharts
+      };
+      
+      // Send to server
+      socketRef.current.emit('update-filters', combinedFilters);
+      console.log('Sent updated filter settings to server via socket:', combinedFilters);
+    } else {
+      // Fall back to REST API if socket not available
+      console.log('Socket not available, using REST API for filtered data');
+      
+      // Build query parameters with date range and filters
+      const queryParams = new URLSearchParams({
+        start: dateRange.start,
+        end: dateRange.end
+      });
+      
+      // Add filter field settings
+      const filters = { ...dataFilters, ...additionalFilters };
+      
+      if (filters.filterField) {
+        queryParams.append('filterField', filters.filterField);
+      }
+      
+      if (filters.minValue) {
+        queryParams.append('minValue', filters.minValue);
+      }
+      
+      if (filters.maxValue) {
+        queryParams.append('maxValue', filters.maxValue);
+      }
+      
+      if (filters.threshold) {
+        queryParams.append('threshold', filters.threshold);
+        queryParams.append('comparisonOperator', filters.comparisonOperator || 'gt');
+      }
+      
+      // Add selected charts if needed for backend filtering
+      Object.entries(selectedCharts).forEach(([chart, isSelected]) => {
+        if (isSelected) {
+          queryParams.append(chart, 'true');
+        }
+      });
+
+      fetch(`http://localhost:5000/api/trend-data?${queryParams.toString()}`)
+        .then((response) => response.json())
+        .then((data) => {
+          // Update all charts with the filtered data
+          if (data.length > 0) {
+            updateAllChartData(data);
+            setTableData(data);
+            setLastUpdate(new Date());
+            setInitialLoadComplete(true);
+          } else {
+            console.log('No data returned for the selected filters');
+            setEmptyChartData();
+            setTableData([]);
+          }
+          setIsLoading(false);
+        })
+        .catch((error) => {
+          console.error('Error fetching filtered data:', error);
+          setIsLoading(false);
+        });
+    }
+  };
+
+  // Handle chart selection
   const handleChartSelection = (event) => {
     const { name, checked } = event.target;
     setSelectedCharts((prev) => ({ ...prev, [name]: checked }));
   };
 
+  // Handle date range changes
   const handleDateRangeChange = (event) => {
     const { name, value } = event.target;
     setDateRange((prev) => ({ ...prev, [name]: value }));
   };
 
-  const fetchFilteredData = () => {
-    const queryParams = new URLSearchParams({
-      start: dateRange.start,
-      end: dateRange.end,
-      radar: selectedCharts.radar,
-      doughnut: selectedCharts.doughnut,
-      line: selectedCharts.line,
-      scatter: selectedCharts.scatter,
-    });
-
-    fetch(`http://localhost:5000/api/trend-data?${queryParams.toString()}`)
-      .then((response) => response.json())
-      .then((data) => {
-        const formattedChartData = {
-          labels: data.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')), // Minimal timestamp format
-          datasets: [
-            {
-              label: 'Flow',
-              data: data.map((item) => item.rTotalQ),
-              backgroundColor: 'rgba(75, 192, 192, 0.6)',
-            },
-          ],
-        };
-        setChartData(formattedChartData);
-        setTableData(data);
-        // ...existing logic for radar, doughnut, line, and scatter chart data...
-      })
-      .catch((error) => console.error('Error fetching filtered data:', error));
+  // Handle additional filter changes
+  const handleAdditionalFilterChange = (filterData) => {
+    setDataFilters(filterData);
   };
 
-  function downloadPage() {
-    const pageContent = document.documentElement.outerHTML;
-    const charts = document.querySelectorAll('.chart-box canvas');
-    const table = document.querySelector('.table-container table');
-
-    const staticCharts = Array.from(charts).map((chart) => {
+  // Download page as HTML report
+  function downloadPage(additionalFilters) {
+    // Get the current date/time for the report
+    const reportDate = new Date().toLocaleString();
+    
+    // Get all visible charts
+    const charts = document.querySelectorAll('.chart-box canvas, .carousel-content canvas');
+    const chartImages = Array.from(charts).map((chart, index) => {
       const img = chart.toDataURL('image/png');
-      return `<img src="${img}" alt="Chart" />`;
+      const chartTitle = chart.closest('.chart-box')?.querySelector('h3')?.textContent || 
+                        `Chart ${index + 1}`;
+      
+      return `
+        <div class="report-chart" id="chart-${index}">
+          <div class="chart-header">
+            <h3>${chartTitle}</h3>
+            <div class="chart-actions">
+              <button class="btn-expand" onclick="expandChart('chart-${index}')">
+                <span class="icon">⛶</span>
+              </button>
+            </div>
+          </div>
+          <div class="chart-body">
+            <img src="${img}" alt="${chartTitle}" style="max-width: 100%; height: auto;"/>
+          </div>
+        </div>
+      `;
     }).join('');
+    
+    // Get the table content
+    const table = document.querySelector('.data-table table');
+    const tableHTML = table ? table.outerHTML.replace('<table', '<table id="data-table" class="interactive-table"') : '<p>No table data available</p>';
+    
+    // Create filter summary section
+    const filterSummary = `
+      <div class="filter-summary">
+        <h3>Filter Settings</h3>
+        <table class="filter-table">
+          <tr>
+            <th>Setting</th>
+            <th>Value</th>
+          </tr>
+          <tr>
+            <td>Date Range</td>
+            <td>${dateRange.start} to ${dateRange.end}</td>
+          </tr>
+          <tr>
+            <td>Chart Types</td>
+            <td>${Object.entries(selectedCharts)
+              .filter(([_, isSelected]) => isSelected)
+              .map(([chartType]) => chartType.charAt(0).toUpperCase() + chartType.slice(1))
+              .join(', ') || 'None'}</td>
+          </tr>
+          ${additionalFilters ? `
+          <tr>
+            <td>Filter Field</td>
+            <td>${additionalFilters.filterField}</td>
+          </tr>
+          ${additionalFilters.minValue ? `
+          <tr>
+            <td>Min Value</td>
+            <td>${additionalFilters.minValue}</td>
+          </tr>` : ''}
+          ${additionalFilters.maxValue ? `
+          <tr>
+            <td>Max Value</td>
+            <td>${additionalFilters.maxValue}</td>
+          </tr>` : ''}
+          ${additionalFilters.threshold ? `
+          <tr>
+            <td>Threshold</td>
+            <td>${additionalFilters.threshold} ${additionalFilters.comparisonOperator === 'gt' ? '>' : '<'}</td>
+          </tr>` : ''}` : ''}
+        </table>
+      </div>
+    `;
+    
+    // Create metrics summary
+    const metricsSummary = `
+      <div class="metrics-summary">
+        <h3>Summary Metrics</h3>
+        <table class="metrics-table">
+          <tr>
+            <th>Metric</th>
+            <th>Value</th>
+          </tr>
+          <tr>
+            <td>Total Flow</td>
+            <td>${metrics.totalFlow}</td>
+          </tr>
+          <tr>
+            <td>Total Pressure</td>
+            <td>${metrics.totalPressure}</td>
+          </tr>
+          <tr>
+            <td>Active Sensors</td>
+            <td>${metrics.activeSensors}</td>
+          </tr>
+          <tr>
+            <td>Last Update</td>
+            <td>${lastUpdate ? lastUpdate.toLocaleString() : 'N/A'}</td>
+          </tr>
+        </table>
+      </div>
+    `;
 
-    const staticTable = table.outerHTML;
-
+    // Create the full report content with CSS for better styling and JavaScript for interactions
     const fullContent = `
+      <!DOCTYPE html>
       <html>
       <head>
-        <title>Report</title>
+        <title>AVEVA Data Report</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          :root {
+            --primary-color: #004f8b;
+            --secondary-color: #0078d4;
+            --accent-color: #28a745;
+            --light-bg: #f8f9fa;
+            --border-color: #ddd;
+            --text-color: #333;
+            --text-muted: #666;
+          }
+          
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+            transition: background-color 0.3s;
+          }
+          
+          body.dark-mode {
+            background-color: #222;
+            color: #eee;
+          }
+          
+          .dark-mode .report-header {
+            border-bottom: 2px solid #004f8b;
+            background-color: #333;
+          }
+          
+          .report-container {
+            max-width: 1200px;
+            margin: 0 auto;
+          }
+          
+          .report-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            border-bottom: 2px solid var(--primary-color);
+            background-color: var(--light-bg);
+            border-radius: 5px;
+          }
+          
+          .report-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary-color);
+          }
+          
+          .report-date {
+            color: var(--text-muted);
+          }
+          
+          .report-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          }
+          
+          .report-section {
+            margin-bottom: 30px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            overflow: hidden;
+          }
+          
+          .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: var(--light-bg);
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+          }
+          
+          .dark-mode .section-header {
+            background-color: #333;
+          }
+          
+          .section-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--primary-color);
+          }
+          
+          .dark-mode .section-header h2 {
+            color: #0078d4;
+          }
+          
+          .section-content {
+            padding: 15px;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+          }
+          
+          .filter-summary, .metrics-summary {
+            margin-bottom: 15px;
+            background-color: var(--light-bg);
+            padding: 15px;
+            border-radius: 5px;
+          }
+          
+          .dark-mode .filter-summary,
+          .dark-mode .metrics-summary {
+            background-color: #333;
+          }
+          
+          .filter-table, .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          
+          .filter-table th, .filter-table td,
+          .metrics-table th, .metrics-table td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: left;
+          }
+          
+          .filter-table th, .metrics-table th {
+            background-color: #f0f0f0;
+          }
+          
+          .dark-mode th {
+            background-color: #444;
+          }
+          
+          .dark-mode td,
+          .dark-mode th {
+            border-color: #555;
+          }
+          
+          .report-charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 15px;
+          }
+          
+          .report-chart {
+            position: relative;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            overflow: hidden;
+            transition: all 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+          }
+          
+          .report-chart.expanded {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 1000px;
+            height: auto;
+            max-height: 90vh;
+            z-index: 1000;
+            background: white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+          }
+          
+          .dark-mode .report-chart.expanded {
+            background: #222;
+          }
+          
+          .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: var(--light-bg);
+            border-bottom: 1px solid var(--border-color);
+          }
+          
+          .dark-mode .chart-header {
+            background-color: #333;
+          }
+          
+          .chart-header h3 {
+            margin: 0;
+            font-size: 16px;
+          }
+          
+          .chart-actions .btn-expand {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--primary-color);
+            padding: 0;
+            width: 24px;
+            height: 24px;
+          }
+          
+          .chart-body {
+            padding: 10px;
+            overflow: auto;
+          }
+          
+          .expanded .chart-body {
+            height: calc(90vh - 60px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+          }
+          
+          .expanded .chart-body img {
+            max-height: 100%;
+            object-fit: contain;
+          }
+          
+          .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 999;
+          }
+          
+          .overlay.active {
+            display: block;
+          }
+          
+          table.interactive-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+          }
+          
+          .interactive-table th, .interactive-table td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: left;
+          }
+          
+          .interactive-table th {
+            background-color: #f0f0f0;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+            user-select: none;
+          }
+          
+          .dark-mode .interactive-table th {
+            background-color: #444;
+          }
+          
+          .interactive-table th:hover {
+            background-color: #e0e0e0;
+          }
+          
+          .dark-mode .interactive-table th:hover {
+            background-color: #555;
+          }
+          
+          .interactive-table th::after {
+            content: '';
+            float: right;
+          }
+          
+          .interactive-table th.sort-asc::after {
+            content: '↑';
+          }
+          
+          .interactive-table th.sort-desc::after {
+            content: '↓';
+          }
+          
+          .table-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+          }
+          
+          #tableSearch {
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            min-width: 200px;
+          }
+          
+          .dark-mode #tableSearch {
+            background-color: #333;
+            color: #eee;
+            border-color: #555;
+          }
+          
+          .pagination {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+          }
+          
+          .pagination button {
+            padding: 5px 10px;
+            border: 1px solid var(--border-color);
+            background-color: white;
+            cursor: pointer;
+            border-radius: 3px;
+          }
+          
+          .dark-mode .pagination button {
+            background-color: #333;
+            color: #eee;
+            border-color: #555;
+          }
+          
+          .pagination button.active {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+          }
+          
+          .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+          
+          #rowsPerPage {
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+          }
+          
+          .dark-mode #rowsPerPage {
+            background-color: #333;
+            color: #eee;
+            border-color: #555;
+          }
+          
+          .report-footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+          }
+          
+          .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+          }
+          
+          .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+          }
+          
+          .btn-secondary {
+            background-color: var(--light-bg);
+            border: 1px solid var(--border-color);
+          }
+          
+          .dark-mode .btn-secondary {
+            background-color: #444;
+            color: #eee;
+            border-color: #555;
+          }
+          
+          .btn-group {
+            display: flex;
+            gap: 10px;
+          }
+          
+          .theme-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 24px;
+            color: var(--text-color);
+          }
+          
+          .dark-mode .theme-toggle {
+            color: #eee;
+          }
+          
+          @media print {
+            .no-print {
+              display: none !important;
+            }
+            
+            body {
+              padding: 0;
+              background-color: white;
+              color: black;
+            }
+            
+            .report-chart {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            
+            .report-section {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            
+            .section-content {
+              display: block !important;
+              max-height: none !important;
+            }
+            
+            table {
+              width: 100% !important;
+            }
+            
+            .pagination {
+              display: none;
+            }
+            
+            #dataTable tbody tr {
+              display: table-row !important;
+            }
+          }
+          
+          @media (max-width: 768px) {
+            .report-charts {
+              grid-template-columns: 1fr;
+            }
+            
+            .report-controls {
+              flex-direction: column;
+              align-items: flex-start;
+            }
+            
+            .btn-group {
+              margin-top: 10px;
+              width: 100%;
+              justify-content: space-between;
+            }
+          }
+        </style>
       </head>
       <body>
-        ${staticCharts}
-        ${staticTable}
+        <div class="overlay" id="overlay"></div>
+        <div class="report-container">
+          <div class="report-header">
+            <div class="report-title">AVEVA Data Report</div>
+            <div class="report-date">Generated: ${reportDate}</div>
+          </div>
+          
+          <div class="report-controls no-print">
+            <div>
+              <button id="toggleTheme" class="theme-toggle" title="Toggle dark/light mode">
+                ☀️
+              </button>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-secondary" onclick="expandAllSections()">Expand All</button>
+              <button class="btn btn-secondary" onclick="collapseAllSections()">Collapse All</button>
+              <button class="btn btn-primary" onclick="window.print()">Print Report</button>
+            </div>
+          </div>
+
+          <div className="report-section">
+            <div className="section-header" onclick="toggleSection('filter-metrics-section')">
+              <h2>Filter Settings & Metrics</h2>
+              <span className="toggle-icon">▼</span>
+            </div>
+            <div className="section-content" id="filter-metrics-section" style="display: block;">
+              <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                ${filterSummary}
+                ${metricsSummary}
+              </div>
+            </div>
+          </div>
+
+          <div className="report-section">
+            <div className="section-header" onclick="toggleSection('charts-section')">
+              <h2>Charts</h2>
+              <span className="toggle-icon">▼</span>
+            </div>
+            <div className="section-content" id="charts-section" style="display: block;">
+              <div className="report-charts">
+                ${chartImages}
+              </div>
+            </div>
+          </div>
+
+          <div className="report-section">
+            <div className="section-header" onclick="toggleSection('data-table-section')">
+              <h2>Data Table</h2>
+              <span className="toggle-icon">▼</span>
+            </div>
+            <div className="section-content" id="data-table-section" style="display: block;">
+              <div className="table-controls no-print">
+                <input type="text" id="tableSearch" placeholder="Search in table..." onkeyup="filterTable()">
+                <div>
+                  <label for="rowsPerPage">Rows per page:</label>
+                  <select id="rowsPerPage" onchange="changeRowsPerPage()">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="all">All</option>
+                  </select>
+                </div>
+              </div>
+              ${tableHTML}
+              <div className="pagination no-print" id="pagination"></div>
+            </div>
+          </div>
+
+          <div className="report-footer">
+            &copy; ${new Date().getFullYear()} AVEVA. All rights reserved.
+          </div>
+        </div>
+
+        <script>
+          // Toggle section visibility
+          function toggleSection(sectionId) {
+            const content = document.getElementById(sectionId);
+            const header = content.previousElementSibling;
+            const toggleIcon = header.querySelector('.toggle-icon');
+            
+            if (content.style.display === 'none') {
+              content.style.display = 'block';
+              toggleIcon.textContent = '▼';
+            } else {
+              content.style.display = 'none';
+              toggleIcon.textContent = '▶';
+            }
+          }
+          
+          // Expand/collapse all sections
+          function expandAllSections() {
+            document.querySelectorAll('.section-content').forEach(section => {
+              section.style.display = 'block';
+              const toggleIcon = section.previousElementSibling.querySelector('.toggle-icon');
+              toggleIcon.textContent = '▼';
+            });
+          }
+          
+          function collapseAllSections() {
+            document.querySelectorAll('.section-content').forEach(section => {
+              section.style.display = 'none';
+              const toggleIcon = section.previousElementSibling.querySelector('.toggle-icon');
+              toggleIcon.textContent = '▶';
+            });
+          }
+          
+          // Expand chart to fullscreen
+          function expandChart(chartId) {
+            const chart = document.getElementById(chartId);
+            const overlay = document.getElementById('overlay');
+            
+            if (chart.classList.contains('expanded')) {
+              chart.classList.remove('expanded');
+              overlay.classList.remove('active');
+            } else {
+              chart.classList.add('expanded');
+              overlay.classList.add('active');
+            }
+          }
+          
+          // Close expanded chart when clicking outside
+          document.getElementById('overlay').addEventListener('click', function() {
+            document.querySelectorAll('.report-chart.expanded').forEach(chart => {
+              chart.classList.remove('expanded');
+            });
+            this.classList.remove('active');
+          });
+          
+          // Table sorting functionality
+          document.addEventListener('DOMContentLoaded', function() {
+            const table = document.getElementById('data-table');
+            if (table) {
+              const headers = table.querySelectorAll('th');
+              headers.forEach((header, index) => {
+                header.addEventListener('click', function() {
+                  sortTable(index);
+                });
+              });
+              
+              // Initialize pagination
+              initPagination();
+            }
+          });
+          
+          function sortTable(columnIndex) {
+            const table = document.getElementById('data-table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.rows);
+            const headers = table.querySelectorAll('th');
+            const clickedHeader = headers[columnIndex];
+            
+            // Toggle sort direction
+            const isAscending = clickedHeader.classList.contains('sort-asc');
+            
+            // Clear all sorting classes
+            headers.forEach(h => {
+              h.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Set new sorting class
+            clickedHeader.classList.add(isAscending ? 'sort-desc' : 'sort-asc');
+            
+            // Sort the rows
+            rows.sort((a, b) => {
+              const aValue = a.cells[columnIndex].textContent.trim();
+              const bValue = b.cells[columnIndex].textContent.trim();
+              
+              // Check if we're dealing with numbers or dates
+              const aNum = parseFloat(aValue.replace(/[^0-9.-]+/g,""));
+              const bNum = parseFloat(bValue.replace(/[^0-9.-]+/g,""));
+              
+              if (!isNaN(aNum) && !isNaN(bNum)) {
+                // Sort numerically
+                return isAscending ? bNum - aNum : aNum - bNum;
+              } else if (aValue.includes('/') || bValue.includes('/')) {
+                // Likely a date - try to parse and compare
+                try {
+                  const aDate = new Date(aValue);
+                  const bDate = new Date(bValue);
+                  if (!isNaN(aDate) && !isNaN(bDate)) {
+                    return isAscending ? bDate - aDate : aDate - bDate;
+                  }
+                } catch(e) {
+                  // Fall back to string comparison
+                }
+              }
+              
+              // Default to string comparison
+              return isAscending ? 
+                bValue.localeCompare(aValue) : 
+                aValue.localeCompare(bValue);
+            });
+            
+            // Reorder the rows in the DOM
+            rows.forEach(row => {
+              tbody.appendChild(row);
+            });
+            
+            // Update pagination
+            if (window.currentPage) {
+              showPage(window.currentPage);
+            }
+          }
+          
+          // Table search functionality
+          function filterTable() {
+            const input = document.getElementById('tableSearch');
+            const filter = input.value.toUpperCase();
+            const table = document.getElementById('data-table');
+            const tr = table.querySelectorAll('tbody tr');
+            
+            let visibleCount = 0;
+            
+            tr.forEach(row => {
+              let visible = false;
+              const cells = row.querySelectorAll('td');
+              
+              cells.forEach(cell => {
+                if (cell.textContent.toUpperCase().indexOf(filter) > -1) {
+                  visible = true;
+                }
+              });
+              
+              // Store original visibility state for pagination
+              row.dataset.filtered = visible ? 'true' : 'false';
+              
+              if (visible) {
+                visibleCount++;
+              }
+            });
+            
+            // Reset and update pagination
+            window.currentPage = 1;
+            initPagination();
+          }
+          
+          // Table pagination
+          function initPagination() {
+            const table = document.getElementById('data-table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.rows).filter(row => row.dataset.filtered !== 'false');
+            const rowsPerPage = document.getElementById('rowsPerPage').value;
+            
+            if (rowsPerPage === 'all') {
+              // Show all rows
+              rows.forEach(row => {
+                row.style.display = row.dataset.filtered === 'false' ? 'none' : '';
+              });
+              
+              // Clear pagination
+              document.getElementById('pagination').innerHTML = '';
+              return;
+            }
+            
+            const pageCount = Math.ceil(rows.length / rowsPerPage);
+            
+            // Create pagination controls
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+            
+            // Previous button
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = 'Previous';
+            prevBtn.disabled = true;
+            prevBtn.addEventListener('click', () => {
+              showPage(window.currentPage - 1);
+            });
+            pagination.appendChild(prevBtn);
+            
+            // Page numbers (simplified if many pages)
+            if (pageCount <= 10) {
+              for (let i = 1; i <= pageCount; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.textContent = i;
+                pageBtn.addEventListener('click', () => {
+                  showPage(i);
+                });
+                pagination.appendChild(pageBtn);
+              }
+            } else {
+              // Show first, current, and last pages with ellipsis
+              for (let i = 1; i <= Math.min(3, pageCount); i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.textContent = i;
+                pageBtn.addEventListener('click', () => {
+                  showPage(i);
+                });
+                pagination.appendChild(pageBtn);
+              }
+              
+              if (pageCount > 3) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                pagination.appendChild(ellipsis);
+                
+                const lastPageBtn = document.createElement('button');
+                lastPageBtn.textContent = pageCount;
+                lastPageBtn.addEventListener('click', () => {
+                  showPage(pageCount);
+                });
+                pagination.appendChild(lastPageBtn);
+              }
+            }
+            
+            // Next button
+            const nextBtn = document.createElement('button');
+            nextBtn.textContent = 'Next';
+            nextBtn.addEventListener('click', () => {
+              showPage(window.currentPage + 1);
+            });
+            pagination.appendChild(nextBtn);
+            
+            // Show first page
+            window.currentPage = 1;
+            showPage(1);
+            
+            function showPage(page) {
+              const rowsPerPage = document.getElementById('rowsPerPage').value;
+              if (rowsPerPage === 'all') return;
+              
+              const perPage = parseInt(rowsPerPage);
+              const filteredRows = Array.from(tbody.rows).filter(row => row.dataset.filtered !== 'false');
+              
+              const startIndex = (page - 1) * perPage;
+              const endIndex = startIndex + perPage;
+              
+              // Hide all rows first
+              Array.from(tbody.rows).forEach(row => {
+                row.style.display = 'none';
+              });
+              
+              // Show only rows for current page
+              filteredRows.slice(startIndex, endIndex).forEach(row => {
+                row.style.display = '';
+              });
+              
+              // Update current page
+              window.currentPage = page;
+              
+              // Update pagination buttons
+              const buttons = pagination.querySelectorAll('button');
+              buttons.forEach(button => {
+                button.classList.remove('active');
+                if (button.textContent === page.toString()) {
+                  button.classList.add('active');
+                }
+              });
+              
+              // Enable/disable previous/next buttons
+              const prevBtn = buttons[0];
+              const nextBtn = buttons[buttons.length - 1];
+              
+              prevBtn.disabled = page === 1;
+              nextBtn.disabled = page === pageCount;
+            }
+          }
+          
+          function changeRowsPerPage() {
+            initPagination();
+          }
+          
+          // Theme toggle functionality
+          document.getElementById('toggleTheme').addEventListener('click', function() {
+            const body = document.body;
+            body.classList.toggle('dark-mode');
+            
+            // Update button text
+            this.textContent = body.classList.contains('dark-mode') ? '🌙' : '☀️';
+            
+            // Store preference in localStorage
+            localStorage.setItem('reportTheme', body.classList.contains('dark-mode') ? 'dark' : 'light');
+          });
+          
+          // Check for saved theme preference
+          document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('reportTheme');
+            const themeToggle = document.getElementById('toggleTheme');
+            
+            if (savedTheme === 'dark') {
+              document.body.classList.add('dark-mode');
+              themeToggle.textContent = '🌙';
+            }
+          });
+        </script>
       </body>
       </html>
     `;
 
+    // Create and download the file
     const blob = new Blob([fullContent], { type: 'text/html;charset=utf-8' });
-    saveAs(blob, 'report_with_charts.html');
+    saveAs(blob, `aveva_report_${new Date().toISOString().split('T')[0]}.html`);
   }
 
+  // Show initial empty state or loading indicator
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+        <p>Loading data based on selected filters...</p>
+      </div>
+    );
+  }
+
+  // Main app rendering
   return (
-    <div className="App">
-      <header className="App-header" style={{ width: '100%', textAlign: 'center', padding: '20px', backgroundColor: '#4CAF50', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <h1 style={{ color: 'white', margin: 0 }}> Report</h1>
-      </header>
-      <div className="App-content" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '20px' }}>
-        <div className="App-main-content" style={{ flex: 5, display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div className="carousel-container" style={{ flex: 1, height: '300px', overflow: 'hidden' }}>
-            <ChartCarousel
-              chartData={chartData}
-              radarChartData={radarChartData}
-              doughnutChartData={doughnutChartData}
-              lineChartData={lineChartData}
-              scatterChartData={scatterChartData}
-              options={{ responsive: true }}
-            />
-          </div>
-          <div className="table-container" style={{ flex: 1, height: '100px', overflow: 'hidden', width: '100%' }}>
-            <DataTable
-              tableData={tableData}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              rowsPerPage={rowsPerPage}
-              setRowsPerPage={setRowsPerPage}
-              currentPage={currentPage}
-              setCurrentPage={setCurrentPage}
-            />
-          </div>
+    <div className="dashboard-container">
+      {/* Sidebar */}
+      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-header">
+          <h2>{isSidebarCollapsed ? '' : 'Reports'}</h2>
+          <button 
+            className="toggle-button" 
+            onClick={toggleSidebar} 
+            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isSidebarCollapsed ? '›' : '‹'}
+          </button>
         </div>
-        <div className="App-form" style={{ flex: 1, marginLeft: '10px' }}>
+        <nav className="sidebar-nav">
+          <ul>
+            <li>
+              <span className="material-icons">dashboard</span>
+              {!isSidebarCollapsed && <span className="nav-text">Dashboard</span>}
+            </li>
+            <li>
+              <span className="material-icons">assessment</span>
+              {!isSidebarCollapsed && <span className="nav-text">Assessment</span>}
+            </li>
+            <li>
+              <span className="material-icons">settings</span>
+              {!isSidebarCollapsed && <span className="nav-text">Settings</span>}
+            </li>
+          </ul>
+        </nav>
+      </aside>
+
+      {/* Main Content */}
+      <main className="main-content">
+        {/* Top Bar with connection status */}
+        <header className="top-bar">
+          <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginRight: '15px' }}>
+              <span className="material-icons" style={{ marginRight: '5px', color: isConnected ? '#28A745' : '#DC3545' }}>
+                {isConnected ? 'sync' : 'sync_disabled'}
+              </span>
+              <span style={{ fontSize: '14px' }}>
+                {isConnected ? 'Connected' : 'Disconnected'}
+              </span>
+            </div>
+            <div style={{ fontSize: '14px', color: '#666' }}>
+              {lastUpdate && `Last update: ${lastUpdate.toLocaleTimeString()}`}
+              {!initialLoadComplete && <span style={{ marginLeft: '10px', color: '#007bff' }}>Select dates and apply filters to load data</span>}
+            </div>
+          </div>
+          <div className="top-bar-icons">
+            <span className="material-icons">notifications</span>
+            <div className="user-profile">
+              <img 
+                src="https://randomuser.me/api/portraits/men/75.jpg" 
+                alt="User Profile" 
+                className="profile-pic" 
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = 'https://ui-avatars.com/api/?name=Admin&background=4c51bf&color=fff';
+                }}
+              />
+              <span className="user-name">Admin</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Metrics Section */}
+        <section className="metrics">
+          <div className="metric-card">
+            <span className="material-icons">water_drop</span>
+            <div className="metric-info">
+              <h3>Total Flow</h3>
+              <p>{metrics.totalFlow}</p>
+            </div>
+          </div>
+          <div className="metric-card">
+            <span className="material-icons">speed</span>
+            <div className="metric-info">
+              <h3>Total Pressure</h3>
+              <p>{metrics.totalPressure}</p>
+            </div>
+          </div>
+          <div className="metric-card">
+            <span className="material-icons">trending_up</span>
+            <div className="metric-info">
+              <h3>System Efficiency</h3>
+              <p>{metrics.systemEfficiency}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Add Filter Panel Here - This ensures it's always visible */}
+        <section className="filter-section main-filter-panel">
           <FilterOptions
             selectedCharts={selectedCharts}
             handleChartSelection={handleChartSelection}
@@ -319,8 +1569,175 @@ function App() {
             fetchFilteredData={fetchFilteredData}
             downloadPage={downloadPage}
           />
-        </div>
-      </div>
+        </section>
+
+        {/* Charts Section */}
+        <section className="charts">
+          {!initialLoadComplete ? (
+            <div className="no-data-message">
+              <div className="no-data-icon">📊</div>
+              <h3>No Data Displayed Yet</h3>
+              <p>Use the filter panel to select a date range and apply filters to load data.</p>
+            </div>
+          ) : tableData.length === 0 ? (
+            <div className="no-data-message">
+              <div className="no-data-icon">🔍</div>
+              <h3>No Data Found</h3>
+              <p>No data matched your filter criteria. Try adjusting your filters.</p>
+            </div>
+          ) : (
+            <>
+              {/* New Engineering Insights Section */}
+              <section className="charts-row">
+                <InsightGenerator 
+                  data={tableData}
+                  thresholds={{
+                    flowVariation: 10, // More strict for industrial applications
+                    pressureThreshold: 75,
+                    efficiencyMinimum: 70,
+                    suddenChanges: 15
+                  }}
+                />
+              </section>
+              
+              <div className="charts-row">
+                <div className="chart-box">
+                  <h3>Pressure Over Time</h3>
+                  <ReportChart 
+                    data={tableData}
+                    type="line"
+                    xField="Time_Stamp"
+                    yField="rTotalQPercentage" 
+                    title="Pressure"
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </div>
+                <div className="chart-box">
+                  <h3>Flow Over Time</h3>
+                  <ReportChart 
+                    data={tableData}
+                    type="line"
+                    xField="Time_Stamp"
+                    yField="rTotalQ"
+                    title="Flow"
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div className="carousel-section">
+                <div className="carousel-layout">
+                  <div className="carousel-content">
+                    <ChartCarousel
+                      lineChartData={lineChartData}
+                      chartData={chartData}
+                      doughnutChartData={doughnutChartData}
+                      scatterChartData={scatterChartData}
+                    />
+                  </div>
+                  <div className="carousel-sidebar">
+                    <FilterOptions
+                      selectedCharts={selectedCharts}
+                      handleChartSelection={handleChartSelection}
+                      dateRange={dateRange}
+                      handleDateRangeChange={handleDateRangeChange}
+                      fetchFilteredData={fetchFilteredData}
+                      downloadPage={downloadPage}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* Data Table Section */}
+        <section className="data-table">
+          <h2>Data Table</h2>
+          {tableData.length > 0 ? (
+            <>
+              <div className="table-controls">
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Flow</th>
+                    <th>Pressure</th>
+                    <th>System Efficiency</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableData
+                    .filter((row) => 
+                      new Date(row.Time_Stamp).toLocaleString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      row.rTotalQ.toString().includes(searchTerm) ||
+                      row.rTotalQPercentage.toString().includes(searchTerm) ||
+                      row.counter.toString().includes(searchTerm)
+                    )
+                    .slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
+                    .map((row, index) => (
+                      <tr key={index}>
+                        <td>{new Date(row.Time_Stamp).toLocaleString()}</td>
+                        <td>{row.rTotalQ.toFixed(2)}</td>
+                        <td>{row.rTotalQPercentage.toFixed(2)}</td>
+                        <td>{row.counter.toFixed(2)}%</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              <div className="pagination">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <span>Page {currentPage}</span>
+                <button
+                  onClick={() => setCurrentPage((prev) => prev + 1)}
+                  disabled={currentPage * rowsPerPage >= tableData.length}
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="no-data-table">
+              <p>No data to display. {!initialLoadComplete ? 'Apply filters to load data.' : 'Try adjusting your filter criteria.'}</p>
+            </div>
+          )}
+        </section>
+
+        {/* Footer */}
+        <footer className="footer">
+          <div className="footer-content">
+            <div className="footer-left">
+              <div className="footer-logo">AVEVA</div>
+              <div className="footer-links">
+                <a href="#">About</a>
+                <a href="#">Contact</a>
+                <a href="#">Support</a>
+                <a href="#">Privacy Policy</a>
+              </div>
+            </div>
+            <div className="footer-right">
+              <div>© {new Date().getFullYear()} AVEVA. All rights reserved.</div>
+              <div className="footer-social">
+                <span className="material-icons">facebook</span>
+                <span className="material-icons">twitter</span>
+                <span className="material-icons">linkedin</span>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </main>
     </div>
   );
 }
