@@ -1631,12 +1631,12 @@ function App() {
                   <h3>
                     Pressure Over Time
                     <div className="chart-controls">
-                      <button className="chart-control-btn" title="Download as PNG">
+                      {/* <button className="chart-control-btn" title="Download as PNG">
                         <span className="material-icons">file_download</span>
                       </button>
                       <button className="chart-control-btn" title="View full screen">
                         <span className="material-icons">fullscreen</span>
-                      </button>
+                      </button> */}
                     </div>
                   </h3>
                   <ReportChart 
@@ -1654,12 +1654,12 @@ function App() {
                   <h3>
                     Flow Over Time
                     <div className="chart-controls">
-                      <button className="chart-control-btn" title="Download as PNG">
+                      {/* <button className="chart-control-btn" title="Download as PNG">
                         <span className="material-icons">file_download</span>
                       </button>
                       <button className="chart-control-btn" title="View full screen">
                         <span className="material-icons">fullscreen</span>
-                      </button>
+                      </button> */}
                     </div>
                   </h3>
                   <ReportChart 

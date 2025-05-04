@@ -8,6 +8,7 @@ import {
   installGlobalErrorPrevention
 } from './utils/chartInstanceManager';
 import ChartDateFilter from './ChartDateFilter';
+import ChartTimeFilter from './ChartTimeFilter';
 
 // Install global error prevention once when this module is imported
 installGlobalErrorPrevention();
@@ -27,8 +28,9 @@ const ReportChart = ({
   const chartId = useRef(null);
   const componentId = `ReportChart-${xField}-${yField}`;
   const [filteredData, setFilteredData] = useState(data);
-  const [chartFilteredData, setChartFilteredData] = useState(data); // Data after chart-specific date filter
+  const [chartFilteredData, setChartFilteredData] = useState(data); // Data after chart-specific filters
   const [chartDateFilter, setChartDateFilter] = useState(null); // Chart-specific date filter
+  const [chartTimeFilter, setChartTimeFilter] = useState(null); // Chart-specific time filter
 
   // Handle chart cleanup on unmount or data/type change
   useEffect(() => {
@@ -107,25 +109,52 @@ const ReportChart = ({
     setFilteredData(updatedData);
   }, [data, dateRange, aggregation, xField, yField]);
 
-  // Apply chart-specific date filter
+  // Apply chart-specific filters
   useEffect(() => {
     let data = filteredData;
     
     // Apply chart-specific date filter if set
     if (chartDateFilter) {
-      data = filteredData.filter(item => {
+      data = data.filter(item => {
         const itemDate = new Date(item[xField]);
         return itemDate >= new Date(chartDateFilter.start) && 
                itemDate <= new Date(chartDateFilter.end);
       });
     }
     
+    // Apply chart-specific time filter if set
+    if (chartTimeFilter) {
+      data = data.filter(item => {
+        const itemDate = new Date(item[xField]);
+        
+        if (chartTimeFilter.type === 'hour') {
+          return itemDate.getHours() === chartTimeFilter.hour;
+        } 
+        else if (chartTimeFilter.type === 'minute') {
+          return itemDate.getHours() === chartTimeFilter.hour && 
+                 itemDate.getMinutes() === chartTimeFilter.minute;
+        }
+        else if (chartTimeFilter.type === 'second') {
+          return itemDate.getHours() === chartTimeFilter.hour && 
+                 itemDate.getMinutes() === chartTimeFilter.minute && 
+                 itemDate.getSeconds() === chartTimeFilter.second;
+        }
+        
+        return true;
+      });
+    }
+    
     setChartFilteredData(data);
-  }, [filteredData, chartDateFilter, xField]);
+  }, [filteredData, chartDateFilter, chartTimeFilter, xField]);
 
   // Handle chart-specific date filter changes
   const handleDateFilterChange = (dateFilter) => {
     setChartDateFilter(dateFilter);
+  };
+
+  // Handle chart-specific time filter changes
+  const handleTimeFilterChange = (timeFilter) => {
+    setChartTimeFilter(timeFilter);
   };
 
   // Prepare chart data based on input data
@@ -426,6 +455,12 @@ const ReportChart = ({
             dateField={xField} 
             onDateFilterChange={handleDateFilterChange}
             title="Date"
+          />
+          <ChartTimeFilter 
+            data={chartDateFilter ? chartFilteredData : filteredData} 
+            dateField={xField} 
+            onTimeFilterChange={handleTimeFilterChange}
+            title="Time"
           />
         </div>
       </div>
