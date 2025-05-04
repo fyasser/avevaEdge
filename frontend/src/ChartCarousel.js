@@ -20,6 +20,8 @@ import {
   patchChartInstance,
   installGlobalErrorPrevention
 } from './utils/chartInstanceManager';
+import ChartDateFilter from './ChartDateFilter';
+import ChartTimeFilter from './ChartTimeFilter';
 
 // Install global error prevention
 installGlobalErrorPrevention();
@@ -55,13 +57,32 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   });
   const componentId = 'ChartCarousel';
   
+  // State for filter management
+  const [chartDateFilter, setChartDateFilter] = useState(null);
+  const [chartTimeFilter, setChartTimeFilter] = useState(null);
+  const [filteredChartData, setFilteredChartData] = useState({
+    line: lineChartData,
+    bar: chartData,
+    doughnut: doughnutChartData,
+    scatter: scatterChartData
+  });
+  
+  // Debug logging for incoming data structure
+  useEffect(() => {
+    console.log("ChartCarousel received new data:");
+    if (lineChartData && lineChartData.datasets && lineChartData.datasets.length > 0) {
+      console.log("Line chart sample:", lineChartData.datasets[0].data.slice(0, 2));
+    }
+    if (scatterChartData && scatterChartData.datasets && scatterChartData.datasets.length > 0) {
+      console.log("Scatter chart sample:", scatterChartData.datasets[0].data.slice(0, 2));
+    }
+  }, [lineChartData, chartData, doughnutChartData, scatterChartData]);
+  
   // Clean up chart instances before unmounting
   useEffect(() => {
     return () => {
       console.log('ChartCarousel: Component will unmount, cleaning up charts');
-      // Destroy all chart instances when component unmounts
       destroyComponentCharts(componentId);
-      // Reset all chart references
       Object.keys(chartRefs.current).forEach(key => {
         chartRefs.current[key] = null;
       });
@@ -74,7 +95,6 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   // Function to clean up chart instances
   const cleanupCharts = () => {
     console.log('ChartCarousel: Cleaning up all charts');
-    // Clean up chart instances using chart instance manager
     Object.entries(chartIds.current).forEach(([chartType, chartId]) => {
       if (chartId) {
         try {
@@ -88,13 +108,18 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
       }
     });
     
-    // Force regeneration of the chart components
     setCarouselKey(Date.now());
   };
   
   // Force chart refresh when the data changes
   useEffect(() => {
     console.log('ChartCarousel: Data changed, refreshing charts');
+    setFilteredChartData({
+      line: lineChartData,
+      bar: chartData,
+      doughnut: doughnutChartData,
+      scatter: scatterChartData
+    });
     cleanupCharts();
   }, [lineChartData, chartData, doughnutChartData, scatterChartData]);
 
@@ -102,17 +127,274 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   useEffect(() => {
     const chartTypes = ['line', 'bar', 'doughnut', 'scatter'];
     
-    // Only cleanup non-visible charts to prevent memory leaks
     chartTypes.forEach((type, index) => {
-      // If this chart is not currently visible and has an ID, unregister it
       if (index !== currentIndex && chartIds.current[type]) {
         console.log(`ChartCarousel: Cleaning up hidden ${type} chart`);
         unregisterChart(chartIds.current[type]);
         chartIds.current[type] = null;
-        // Don't set chartRef to null as it's a React ref
       }
     });
   }, [currentIndex]);
+
+  // Get timestamp from a data point based on chart type
+  const getTimestamp = (dataPoint, chartType) => {
+    if (!dataPoint) return null;
+    
+    // Check known timestamp fields - App.js formats these differently per chart type
+    if (chartType === 'line' || chartType === 'bar') {
+      // Get index from labels array instead of from the data point
+      return null; // We'll handle these differently
+    } else if (chartType === 'scatter') {
+      // Scatter plot has timestamp property in the data
+      if (dataPoint.timestamp) return dataPoint.timestamp;
+    } 
+    
+    // Fallbacks for any chart type
+    if (dataPoint.Time_Stamp) return dataPoint.Time_Stamp;
+    if (dataPoint.timestamp) return dataPoint.timestamp;
+    if (typeof dataPoint.x === 'string') return dataPoint.x;
+    if (dataPoint.t) return dataPoint.t;
+    
+    return null;
+  };
+
+  // Apply filters to all chart data
+  useEffect(() => {
+    // Skip if no filters applied
+    if (!chartDateFilter && !chartTimeFilter) {
+      console.log('ChartCarousel: No filters active, using original data');
+      setFilteredChartData({
+        line: lineChartData,
+        bar: chartData,
+        doughnut: doughnutChartData,
+        scatter: scatterChartData
+      });
+      return;
+    }
+    
+    console.log('ChartCarousel: Applying filters', { chartDateFilter, chartTimeFilter });
+    
+    try {
+      // Define the data types and their source data
+      const chartTypes = {
+        line: lineChartData,
+        bar: chartData,
+        doughnut: doughnutChartData,
+        scatter: scatterChartData
+      };
+
+      // Create new filtered chart data objects
+      const newFilteredData = {};
+      
+      // Process each chart type
+      Object.entries(chartTypes).forEach(([type, data]) => {
+        if (!data || !data.datasets) {
+          newFilteredData[type] = data;
+          return;
+        }
+
+        // Deep copy the chart data
+        const chartDataCopy = JSON.parse(JSON.stringify(data));
+        
+        // Handle time-based filtering differently based on chart type
+        if (type === 'line' || type === 'bar') {
+          // These charts use labels array for timestamps and datasets for values
+          if (chartDataCopy.labels && Array.isArray(chartDataCopy.labels)) {
+            // Create a mask of which indices to keep
+            const keepIndices = [];
+            
+            // Filter labels based on date/time
+            chartDataCopy.labels.forEach((label, index) => {
+              let keep = true;
+              
+              // Try to parse the label as a date
+              const labelDate = new Date(label);
+              if (!isNaN(labelDate.getTime())) {
+                // Apply date filter if present
+                if (chartDateFilter) {
+                  const startDate = new Date(chartDateFilter.start);
+                  const endDate = new Date(chartDateFilter.end);
+                  
+                  if (labelDate < startDate || labelDate > endDate) {
+                    keep = false;
+                  }
+                }
+                
+                // Apply time filter if present
+                if (keep && chartTimeFilter && chartTimeFilter.type !== 'none') {
+                  if (chartTimeFilter.type === 'hour' && chartTimeFilter.hour !== undefined) {
+                    if (labelDate.getHours() !== chartTimeFilter.hour) {
+                      keep = false;
+                    }
+                  } else if (chartTimeFilter.type === 'minute' && 
+                      chartTimeFilter.hour !== undefined && 
+                      chartTimeFilter.minute !== undefined) {
+                    if (labelDate.getHours() !== chartTimeFilter.hour || 
+                        labelDate.getMinutes() !== chartTimeFilter.minute) {
+                      keep = false;
+                    }
+                  } else if (chartTimeFilter.type === 'second' && 
+                      chartTimeFilter.hour !== undefined && 
+                      chartTimeFilter.minute !== undefined &&
+                      chartTimeFilter.second !== undefined) {
+                    if (labelDate.getHours() !== chartTimeFilter.hour || 
+                        labelDate.getMinutes() !== chartTimeFilter.minute || 
+                        labelDate.getSeconds() !== chartTimeFilter.second) {
+                      keep = false;
+                    }
+                  }
+                }
+              }
+              
+              if (keep) {
+                keepIndices.push(index);
+              }
+            });
+            
+            // Filter labels
+            chartDataCopy.labels = keepIndices.map(i => chartDataCopy.labels[i]);
+            
+            // Filter all datasets
+            chartDataCopy.datasets = chartDataCopy.datasets.map(dataset => {
+              return {
+                ...dataset,
+                data: keepIndices.map(i => dataset.data[i])
+              };
+            });
+            
+            console.log(`ChartCarousel: ${type} chart filtered - kept ${keepIndices.length} of ${data.labels.length} points`);
+          }
+        } else if (type === 'scatter') {
+          // Scatter charts have timestamps inside each data point
+          chartDataCopy.datasets = chartDataCopy.datasets.map(dataset => {
+            if (Array.isArray(dataset.data)) {
+              const originalLength = dataset.data.length;
+              
+              const filteredData = dataset.data.filter(point => {
+                // Try to get timestamp from the data point
+                const timestamp = getTimestamp(point, 'scatter');
+                if (!timestamp) return true; // Keep points without timestamp
+                
+                const pointDate = new Date(timestamp);
+                if (isNaN(pointDate.getTime())) return true; // Keep points with invalid dates
+                
+                // Apply date filter if present
+                if (chartDateFilter) {
+                  const startDate = new Date(chartDateFilter.start);
+                  const endDate = new Date(chartDateFilter.end);
+                  
+                  if (pointDate < startDate || pointDate > endDate) {
+                    return false;
+                  }
+                }
+                
+                // Apply time filter if present
+                if (chartTimeFilter && chartTimeFilter.type !== 'none') {
+                  if (chartTimeFilter.type === 'hour' && chartTimeFilter.hour !== undefined) {
+                    if (pointDate.getHours() !== chartTimeFilter.hour) {
+                      return false;
+                    }
+                  } else if (chartTimeFilter.type === 'minute' && 
+                      chartTimeFilter.hour !== undefined && 
+                      chartTimeFilter.minute !== undefined) {
+                    if (pointDate.getHours() !== chartTimeFilter.hour || 
+                        pointDate.getMinutes() !== chartTimeFilter.minute) {
+                      return false;
+                    }
+                  } else if (chartTimeFilter.type === 'second' && 
+                      chartTimeFilter.hour !== undefined && 
+                      chartTimeFilter.minute !== undefined &&
+                      chartTimeFilter.second !== undefined) {
+                    if (pointDate.getHours() !== chartTimeFilter.hour || 
+                        pointDate.getMinutes() !== chartTimeFilter.minute || 
+                        pointDate.getSeconds() !== chartTimeFilter.second) {
+                      return false;
+                    }
+                  }
+                }
+                
+                return true;
+              });
+              
+              console.log(`ChartCarousel: ${type} chart filtered - kept ${filteredData.length} of ${originalLength} points`);
+              
+              return {
+                ...dataset,
+                data: filteredData
+              };
+            }
+            return dataset;
+          });
+        }
+        
+        // Doughnut charts don't typically have time filtering - leave as is
+        if (type === 'doughnut') {
+          newFilteredData[type] = data;
+        } else {
+          newFilteredData[type] = chartDataCopy;
+        }
+      });
+      
+      setFilteredChartData(newFilteredData);
+      cleanupCharts(); // Force chart regeneration
+      
+    } catch (error) {
+      console.error('ChartCarousel: Error filtering data', error);
+      // Fallback to original data on error
+      setFilteredChartData({
+        line: lineChartData,
+        bar: chartData,
+        doughnut: doughnutChartData,
+        scatter: scatterChartData
+      });
+    }
+  }, [chartDateFilter, chartTimeFilter, lineChartData, chartData, doughnutChartData, scatterChartData]);
+
+  // Handle date filter changes
+  const handleDateFilterChange = (dateFilter) => {
+    console.log('ChartCarousel: Date filter changed:', dateFilter);
+    setChartDateFilter(dateFilter);
+  };
+
+  // Handle time filter changes
+  const handleTimeFilterChange = (timeFilter) => {
+    console.log('ChartCarousel: Time filter changed:', timeFilter);
+    setChartTimeFilter(timeFilter);
+  };
+
+  // Extract and normalize data for filter dropdowns
+  const getDataForFilters = () => {
+    const result = [];
+    
+    // Extract timestamps from line/bar chart labels
+    if (lineChartData && lineChartData.labels) {
+      lineChartData.labels.forEach(label => {
+        const date = new Date(label);
+        if (!isNaN(date.getTime())) {
+          result.push({
+            Time_Stamp: date.toISOString()
+          });
+        }
+      });
+    }
+    
+    // Extract timestamps from scatter data points
+    if (scatterChartData && scatterChartData.datasets) {
+      scatterChartData.datasets.forEach(dataset => {
+        if (dataset.data) {
+          dataset.data.forEach(point => {
+            if (point.timestamp) {
+              result.push({
+                Time_Stamp: point.timestamp
+              });
+            }
+          });
+        }
+      });
+    }
+    
+    return result;
+  };
 
   // Common chart options with cursor features
   const getCommonOptions = (title) => ({
@@ -270,9 +552,9 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   };
 
   // Enhanced line chart data with area fill
-  const enhancedLineChartData = lineChartData ? {
-    ...lineChartData,
-    datasets: lineChartData.datasets.map(dataset => ({
+  const enhancedLineChartData = filteredChartData.line ? {
+    ...filteredChartData.line,
+    datasets: filteredChartData.line.datasets.map(dataset => ({
       ...dataset,
       tension: 0.3, // Add curve to the line
       fill: true, // Add area fill
@@ -284,9 +566,9 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   } : fallbackChart;
 
   // Enhanced bar chart data
-  const enhancedBarChartData = chartData ? {
-    ...chartData,
-    datasets: chartData.datasets.map(dataset => ({
+  const enhancedBarChartData = filteredChartData.bar ? {
+    ...filteredChartData.bar,
+    datasets: filteredChartData.bar.datasets.map(dataset => ({
       ...dataset,
       borderWidth: 1,
       hoverBackgroundColor: 'rgba(75, 192, 192, 0.8)', // Highlight on hover
@@ -295,9 +577,9 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   } : fallbackChart;
 
   // Enhanced doughnut chart data for better hover effects
-  const enhancedDoughnutChartData = doughnutChartData ? {
-    ...doughnutChartData,
-    datasets: doughnutChartData.datasets.map(dataset => ({
+  const enhancedDoughnutChartData = filteredChartData.doughnut ? {
+    ...filteredChartData.doughnut,
+    datasets: filteredChartData.doughnut.datasets.map(dataset => ({
       ...dataset,
       hoverOffset: 12, // Makes the segment pop out on hover
       borderWidth: 2,
@@ -306,9 +588,9 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   } : fallbackChart;
 
   // Enhanced scatter chart data
-  const enhancedScatterChartData = scatterChartData ? {
-    ...scatterChartData,
-    datasets: scatterChartData.datasets.map(dataset => ({
+  const enhancedScatterChartData = filteredChartData.scatter ? {
+    ...filteredChartData.scatter,
+    datasets: filteredChartData.scatter.datasets.map(dataset => ({
       ...dataset,
       pointRadius: 5,
       pointHoverRadius: 8, // Enlarged point on hover
@@ -409,9 +691,31 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
     );
   };
 
+  // Get the collected data points for the filters
+  const filterData = getDataForFilters();
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold text-aveva-primary mb-4 text-center">{charts[currentIndex].title}</h2>
+      
+      {/* Add filters at the top of the carousel */}
+      <div className="chart-filters-row mb-4 border-b border-gray-200 pb-3">
+        <div className="chart-filters-container flex flex-wrap gap-4">
+          <ChartDateFilter 
+            data={filterData}
+            dateField="Time_Stamp"
+            onDateFilterChange={handleDateFilterChange}
+            title="Date"
+          />
+          <ChartTimeFilter
+            data={filterData}
+            dateField="Time_Stamp"
+            onTimeFilterChange={handleTimeFilterChange}
+            title="Time"
+          />
+        </div>
+      </div>
+      
       <div className="w-full h-[630px] mb-4">
         {/* Only render the currently selected chart */}
         {charts[currentIndex].render()}

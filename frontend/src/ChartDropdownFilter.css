@@ -1,20 +1,28 @@
-    .chart-dropdown-filter {
+.chart-dropdown-filter {
   display: inline-flex;
   align-items: center;
-  margin-right: 12px;
+  margin-right: 0.5px; /* Reduced margin */
   position: relative;
-  font-size: 0.85rem;
+  font-size: 0.8rem; /* Smaller font */
+  font-family: var(--aveva-heading-font);
+  height: 30px;
 }
 
 .filter-title {
-  margin-right: 6px;
-  color: #555;
+  margin-right: 4px; /* Reduced from 8px to 4px */
+  padding-right: 1px; /* Reduced padding */
+  color: #444;
   font-weight: 500;
+  white-space: nowrap;
+  min-width: 35px; /* Reduced from 40px */
+  text-align: right;
+  font-size: 0.78rem; /* Slightly smaller font */
 }
 
 .dropdown-container {
   position: relative;
-  min-width: 120px;
+  width: 110px;
+  height: 30px;
 }
 
 .dropdown-button {
@@ -22,32 +30,51 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 5px 10px;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
+  padding: 2px 18px 2px 8px;
+  background-color: white;
+  border: 1px solid #ced4da;
   border-radius: 4px;
   cursor: pointer;
   color: #333;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   text-align: left;
+  font-weight: 400;
+  position: relative;
+  box-shadow: none;
+  transition: all 0.2s ease;
+  height: 28px; /* Consistent height for all buttons */
+  line-height: 28px; /* Align text vertically */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dropdown-button:hover {
-  background-color: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.dropdown-button[aria-expanded="true"] {
+  border-color: var(--aveva-secondary);
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
 }
 
 .dropdown-arrow {
-  margin-left: 8px;
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 0.7rem;
-  color: #6c757d;
+  color: #444;
+  transition: transform 0.2s ease;
 }
 
 .dropdown-menu {
   position: absolute;
   top: 100%;
   left: 0;
-  z-index: 100;
-  min-width: 100%;
+  z-index: 9999; /* Very high z-index to ensure it's on top */
+  min-width: 80px;
+  max-width: none;
   max-height: 250px;
   overflow-y: auto;
   margin-top: 4px;
@@ -55,14 +82,45 @@
   border: 1px solid #dee2e6;
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  white-space: nowrap; /* Prevent text wrapping */
+  width: auto !important; /* Force width to fit content */
+  min-width: max-content !important; /* Ensure it's at least as wide as its content */
+  width: max-content !important; /* Force width to fit content precisely */
+  z-index: 9999;
+}
+
+.dropdown-menu {
+  position: absolute;
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  z-index: 9999;
+  min-width: 110px;
+  width: max-content;
+  white-space: nowrap;
+}
+
+.dropdown-menu.align-right {
+  left: auto;
+  right: 0;
+}
+
+.chart-filters-container > *:last-child .dropdown-menu,
+.time-value-filter .dropdown-menu {
+  left: auto;
+  right: 0;
 }
 
 .dropdown-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 4px 8px; /* More compact padding */
   cursor: pointer;
+  font-size: 0.85rem;
+  color: #333;
+  height: 25px; /* Reduced height */
 }
 
 .dropdown-item:hover {
@@ -125,4 +183,204 @@
   .chart-dropdown-filter {
     margin-bottom: 6px;
   }
+}
+
+.chart-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  overflow: visible; /* Changed from 'hidden' to prevent dropdown cutting off */
+  position: relative;
+}
+
+.chart-wrapper {
+  overflow: visible !important; /* Ensure dropdowns can extend outside */
+}
+
+/* Filter section to match photo exactly */
+.chart-metric-section {
+  display: flex;
+  flex-direction: column;
+  padding: 15px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.chart-metric-row {
+  padding: 5px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.chart-filters-row {
+  display: flex;
+  padding: 8px 10px; /* Reduced padding */
+  border-bottom: 1px solid #eee;
+  align-items: center;
+  min-height: 44px; /* Fixed compact height */
+  overflow: visible !important; /* Ensure dropdowns can extend outside */
+  position: relative; /* Ensure it's a positioning context for absolute elements */
+  z-index: 1; /* Keep above other elements */
+}
+
+.chart-filter-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.chart-metric-name {
+  font-size: 16px;
+  margin-right: 10px;
+  color: #333;
+  min-width: 50px; /* Reduced width */
+}
+
+.chart-filters-container {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 5px; /* Reduced from 10px to 5px */
+  width: 100%;
+  overflow: visible !important;
+}
+
+.chart-time-filter {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 2px; /* Reduced from 5px to 2px */
+}
+
+.chart-date-filter {
+  display: flex;
+  align-items: center;
+  margin-right: 2px; /* Reduced from 5px to 2px */
+}
+
+.chart-time-filter {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 5px;
+}
+
+.chart-date-filter {
+  display: flex;
+  align-items: center;
+  margin-right: 5px;
+}
+
+.time-value-filter {
+  display: flex;
+  align-items: center;
+  margin-left: 0;
+}
+
+.time-value-filter .chart-dropdown-filter {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.time-value-filter-placeholder {
+  width: 110px; /* Same width as dropdown container */
+  height: 30px;
+  display: inline-block;
+}
+
+/* Ensure consistent sizing for all dropdown containers */
+.chart-date-filter .dropdown-container,
+.chart-time-filter .dropdown-container,
+.time-value-filter .dropdown-container {
+  width: 100px; /* Reduced from 110px */
+  height: 30px;
+}
+
+/* Chart content */
+.chart-content {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 5px 10px 10px; /* Reduced padding */
+  overflow: hidden; /* Only hide overflow here */
+}
+
+.chart-content {
+  overflow: hidden; /* Keep chart content contained */
+}
+
+.chart-center-title {
+  text-align: center;
+  font-weight: 500;
+  font-size: 15px; /* Smaller font */
+  margin-bottom: 8px; /* Reduced margin */
+  color: #444;
+}
+
+.chart-wrapper, .chart-content, .chart-filters-row, .chart-filters-container,
+.chart-time-filter, .chart-date-filter, .time-value-filter {
+  overflow: visible !important;
+}
+
+/* Fix specifically for the All Times dropdown when By Minute is selected */
+.time-value-filter .dropdown-menu {
+  right: 0;
+  left: auto;
+  position: absolute;
+  min-width: max-content !important;
+}
+
+/* Specific fix for timing details dropdown that gets cut off at the right edge */
+.timing-details-dropdown-menu {
+  position: absolute !important;
+  right: 0 !important;
+  left: auto !important;
+  min-width: 120px !important;
+  width: auto !important;
+  white-space: nowrap;
+  z-index: 10000;
+  transform: translateX(0) !important;
+}
+
+.timing-details-dropdown-menu {
+  right: 0;
+  left: auto;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+/* Fix the overall positioning for the timing details dropdown */
+.timing-details-dropdown {
+  position: relative;
+}
+
+/* Styling for the portal-based dropdown menu */
+.dropdown-menu-portal {
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
+  max-height: 250px;
+  margin-top: 4px;
+  width: auto !important;
+  min-width: max-content !important;
+}
+
+/* Fixed-width minimum for portals of timing details menus */
+.timing-details-dropdown-menu {
+  min-width: 120px !important;
+}
+
+.chart-filters-row,
+.chart-filters-container,
+.chart-time-filter,
+.chart-date-filter,
+.time-value-filter {
+  overflow: visible !important;
 }

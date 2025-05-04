@@ -22,7 +22,8 @@ const ReportChart = ({
   style = {},
   options = {},
   dateRange = null, // Prop for date range filter (applied via useEffect)
-  aggregation = 'none' // Prop for aggregation filter (applied via useEffect)
+  aggregation = 'none', // Prop for aggregation filter (applied via useEffect)
+  showTitle = true // Add new prop to control title visibility
 }) => {
   const chartRef = useRef(null);
   const chartId = useRef(null);
@@ -124,28 +125,133 @@ const ReportChart = ({
     
     // Apply chart-specific time filter if set
     if (chartTimeFilter) {
-      data = data.filter(item => {
-        const itemDate = new Date(item[xField]);
+      // Check if we need to aggregate data points by time granularity
+      if (chartTimeFilter.aggregatePoints && chartTimeFilter.granularity) {
+        // Create groups based on the selected time granularity
+        const aggregatedData = {};
         
-        if (chartTimeFilter.type === 'hour') {
-          return itemDate.getHours() === chartTimeFilter.hour;
-        } 
-        else if (chartTimeFilter.type === 'minute') {
-          return itemDate.getHours() === chartTimeFilter.hour && 
-                 itemDate.getMinutes() === chartTimeFilter.minute;
-        }
-        else if (chartTimeFilter.type === 'second') {
-          return itemDate.getHours() === chartTimeFilter.hour && 
-                 itemDate.getMinutes() === chartTimeFilter.minute && 
-                 itemDate.getSeconds() === chartTimeFilter.second;
-        }
+        data.forEach(item => {
+          const itemDate = new Date(item[xField]);
+          let key;
+          
+          // Generate different keys based on granularity
+          if (chartTimeFilter.granularity === 'hour') {
+            // Group by hour (YYYY-MM-DD-HH format)
+            key = format(itemDate, 'yyyy-MM-dd-HH');
+            
+            // If specific hour is selected, only include matching hours
+            if (chartTimeFilter.type === 'hour' && chartTimeFilter.hour !== undefined) {
+              if (itemDate.getHours() !== chartTimeFilter.hour) {
+                return; // Skip this item if the hour doesn't match
+              }
+            }
+          } 
+          else if (chartTimeFilter.granularity === 'minute') {
+            // Group by minute (YYYY-MM-DD-HH-mm format)
+            key = format(itemDate, 'yyyy-MM-dd-HH-mm');
+            
+            // If specific minute is selected, only include matching minutes
+            if (chartTimeFilter.type === 'minute' && 
+                chartTimeFilter.hour !== undefined && 
+                chartTimeFilter.minute !== undefined) {
+              if (itemDate.getHours() !== chartTimeFilter.hour || 
+                  itemDate.getMinutes() !== chartTimeFilter.minute) {
+                return; // Skip this item if the hour/minute doesn't match
+              }
+            }
+          } 
+          else if (chartTimeFilter.granularity === 'second') {
+            // Group by second (YYYY-MM-DD-HH-mm-ss format)
+            key = format(itemDate, 'yyyy-MM-dd-HH-mm-ss');
+            
+            // If specific second is selected, only include matching seconds
+            if (chartTimeFilter.type === 'second' && 
+                chartTimeFilter.hour !== undefined && 
+                chartTimeFilter.minute !== undefined && 
+                chartTimeFilter.second !== undefined) {
+              if (itemDate.getHours() !== chartTimeFilter.hour || 
+                  itemDate.getMinutes() !== chartTimeFilter.minute || 
+                  itemDate.getSeconds() !== chartTimeFilter.second) {
+                return; // Skip this item if the hour/minute/second doesn't match
+              }
+            }
+          }
+          
+          // Aggregate data points
+          if (!aggregatedData[key]) {
+            aggregatedData[key] = {
+              ...item,
+              count: 1,
+              originalTimestamp: new Date(item[xField])
+            };
+          } else {
+            // Sum up the values for this time slot
+            aggregatedData[key][yField] += parseFloat(item[yField] || 0);
+            
+            // If there are other numeric fields that need to be averaged, add them here
+            if (item.rTotalQ !== undefined && yField !== 'rTotalQ') {
+              aggregatedData[key].rTotalQ = (aggregatedData[key].rTotalQ || 0) + item.rTotalQ;
+            }
+            if (item.rTotalQPercentage !== undefined && yField !== 'rTotalQPercentage') {
+              aggregatedData[key].rTotalQPercentage = (aggregatedData[key].rTotalQPercentage || 0) + item.rTotalQPercentage;
+            }
+            if (item.systemFluidState !== undefined) {
+              aggregatedData[key].systemFluidState = (aggregatedData[key].systemFluidState || 0) + item.systemFluidState;
+            }
+            
+            aggregatedData[key].count++;
+          }
+        });
         
-        return true;
-      });
+        // Calculate averages for each group
+        data = Object.values(aggregatedData).map(item => {
+          const result = { ...item };
+          
+          // Average the values
+          result[yField] = item[yField] / item.count;
+          
+          // Average other numeric fields if present
+          if (item.rTotalQ !== undefined && yField !== 'rTotalQ') {
+            result.rTotalQ = item.rTotalQ / item.count;
+          }
+          if (item.rTotalQPercentage !== undefined && yField !== 'rTotalQPercentage') {
+            result.rTotalQPercentage = item.rTotalQPercentage / item.count;
+          }
+          if (item.systemFluidState !== undefined) {
+            result.systemFluidState = item.systemFluidState / item.count;
+          }
+          
+          // Keep the original timestamp for proper display
+          result[xField] = item.originalTimestamp;
+          
+          return result;
+        });
+      } 
+      // If not aggregating, apply regular time-based filtering
+      else {
+        data = data.filter(item => {
+          const itemDate = new Date(item[xField]);
+          
+          if (chartTimeFilter.type === 'hour') {
+            return itemDate.getHours() === chartTimeFilter.hour;
+          } 
+          else if (chartTimeFilter.type === 'minute') {
+            return itemDate.getHours() === chartTimeFilter.hour && 
+                   itemDate.getMinutes() === chartTimeFilter.minute;
+          }
+          else if (chartTimeFilter.type === 'second') {
+            return itemDate.getHours() === chartTimeFilter.hour && 
+                   itemDate.getMinutes() === chartTimeFilter.minute && 
+                   itemDate.getSeconds() === chartTimeFilter.second;
+          }
+          
+          return true;
+        });
+      }
     }
     
     setChartFilteredData(data);
-  }, [filteredData, chartDateFilter, chartTimeFilter, xField]);
+  }, [filteredData, chartDateFilter, chartTimeFilter, xField, yField]);
 
   // Handle chart-specific date filter changes
   const handleDateFilterChange = (dateFilter) => {
@@ -212,7 +318,12 @@ const ReportChart = ({
       }
       
       chartData = {
-        labels: displayData.map(item => format(new Date(item[xField]), 'MMM dd HH:mm')),
+        labels: displayData.map(item => {
+          // Use more compact date format for dense time series
+          const date = new Date(item[xField]);
+          // Only include MM-DD HH:MM format to save space
+          return format(date, 'MM-dd HH:mm');
+        }),
         datasets: [{
           label: title || `${yField} Over Time`,
           data: displayData.map(item => item[yField]),
@@ -220,7 +331,7 @@ const ReportChart = ({
           backgroundColor: colors.background,
           fill: true,
           tension: 0.2, // Reduced tension for more accurate representation
-          pointRadius: displayData.length > 100 ? 1 : 2, // Smaller points for dense data
+          pointRadius: displayData.length > 50 ? 0 : 2, // Hide points for dense data
           pointHoverRadius: 7,
           borderWidth: 2,
           pointBackgroundColor: colors.primary,
@@ -374,17 +485,20 @@ const ReportChart = ({
           drawBorder: false
         },
         ticks: {
-          maxTicksLimit: 10, // Increased for better distribution
-          maxRotation: 45,
+          maxTicksLimit: 6, // Reduced for less crowding
+          maxRotation: 30, // Reduced rotation angle 
           minRotation: 0,
-          padding: 4, // Reduced padding
+          padding: 3, // Reduced padding
           font: {
-            size: 11
+            size: 10 // Smaller font size
           },
-          autoSkip: true // Ensure ticks are properly skipped when needed
+          autoSkip: true,
+          major: {
+            enabled: true // Enable major ticks for better readability
+          }
         },
-        offset: false, // Remove extra space on axis
-        distribution: 'linear' // Ensure even distribution of points
+        offset: false,
+        distribution: 'linear'
       },
       y: {
         position: 'left',
@@ -394,18 +508,19 @@ const ReportChart = ({
           drawBorder: false
         },
         ticks: {
-          padding: 2, // Reduced padding
+          padding: 2,
           font: {
-            size: 11
+            size: 10 // Smaller font
           },
           callback: function(value) {
             if (value >= 1000) {
               return (value / 1000).toFixed(1) + 'k';
             }
             return value;
-          }
+          },
+          maxTicksLimit: 8 // Limit number of ticks on y-axis
         },
-        beginAtZero: false
+        beginAtZero: true // Start from zero for better comparison
       }
     } : undefined, // No scales for doughnut charts
     interaction: {
@@ -438,18 +553,20 @@ const ReportChart = ({
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      width: '100%', 
-      height: '400px', // Increased height for better visualization
-      maxHeight: '500px', // Increased max height
-      overflow: 'hidden',
-      position: 'relative',
+    <div className="chart-wrapper" style={{
+      height: '450px',
       ...style
     }}>
-      <div className="chart-header-with-filters">
-        <div className="chart-filters">
+      {/* Only display title bar if showTitle prop is true (default) */}
+      {showTitle !== false && (
+        <div className="chart-title-bar" style={{ padding: '8px 15px' }}>
+          {title || (yField === "rTotalQ" ? "Flow Over Time" : yField === "rTotalQPercentage" ? "Pressure Over Time" : "Chart")}
+        </div>
+      )}
+      
+      {/* More compact filters row with better spacing */}
+      <div className="chart-filters-row" style={{ padding: '5px 12px', borderBottom: '1px solid #eee' }}>
+        <div className="chart-filters-container">
           <ChartDateFilter 
             data={filteredData} 
             dateField={xField} 
@@ -465,8 +582,11 @@ const ReportChart = ({
         </div>
       </div>
       
-      <div className="chart-container">
-        {renderChart()}
+      {/* Maximized chart content area with improved height */}
+      <div className="chart-content" style={{ padding: '0 5px 5px', flex: '1' }}>
+        <div style={{ flex: 1, width: '100%', height: '100%' }}>
+          {renderChart()}
+        </div>
       </div>
     </div>
   );

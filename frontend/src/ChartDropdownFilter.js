@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './ChartDropdownFilter.css';
 
 const ChartDropdownFilter = ({ 
   title,
   filterOptions, // Ensure this is always an array
   initialValue,
-  onFilterChange 
+  onFilterChange,
+  className = '' // Add className prop with empty string default
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
   
   // Ensure filterOptions is a valid array before accessing it
   const safeFilterOptions = Array.isArray(filterOptions) ? filterOptions : [];
@@ -15,6 +17,22 @@ const ChartDropdownFilter = ({
   const [selectedValue, setSelectedValue] = useState(
     initialValue || (safeFilterOptions.length > 0 ? safeFilterOptions[0].value : '')
   );
+  
+  // Close dropdown if clicked outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
@@ -35,7 +53,7 @@ const ChartDropdownFilter = ({
                          (safeFilterOptions.length > 0 ? safeFilterOptions[0] : null);
 
   return (
-    <div className="chart-dropdown-filter">
+    <div className={`chart-dropdown-filter ${className}`} ref={dropdownRef}>
       {title && <span className="filter-title">{title}:</span>}
       
       <div className="dropdown-container">
@@ -50,7 +68,7 @@ const ChartDropdownFilter = ({
         </button>
         
         {isOpen && (
-          <div className="dropdown-menu">
+          <div className={`dropdown-menu ${className ? className + '-menu' : ''}`}>
             {safeFilterOptions.map(option => (
               <div 
                 key={option.value} 

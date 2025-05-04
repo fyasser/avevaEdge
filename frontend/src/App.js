@@ -1628,7 +1628,7 @@ function App() {
               
               <div className="charts-row">
                 <div className="chart-box">
-                  <h3>
+                  <h3 className="chart-title">
                     Pressure Over Time
                     <div className="chart-controls">
                       {/* <button className="chart-control-btn" title="Download as PNG">
@@ -1647,11 +1647,12 @@ function App() {
                     title="Pressure"
                     style={{ width: '100%', height: '100%' }}
                     dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
-                    aggregation={dataFilters.aggregation || 'none'} 
+                    aggregation={dataFilters.aggregation || 'none'}
+                    showTitle={false} /* Hide duplicate title to prevent "Pressure" from showing twice */
                   />
                 </div>
                 <div className="chart-box">
-                  <h3>
+                  <h3 className="chart-title">
                     Flow Over Time
                     <div className="chart-controls">
                       {/* <button className="chart-control-btn" title="Download as PNG">
@@ -1670,7 +1671,8 @@ function App() {
                     title="Flow"
                     style={{ width: '100%', height: '100%' }}
                     dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
-                    aggregation={dataFilters.aggregation || 'none'} 
+                    aggregation={dataFilters.aggregation || 'none'}
+                    showTitle={false} /* Hide duplicate title to prevent "Flow" from showing twice */
                   />
                 </div>
               </div>

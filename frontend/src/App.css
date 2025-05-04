@@ -31,6 +31,35 @@ body {
   --aveva-warning: #FFC107;    /* Warning Yellow */
   --aveva-danger: #DC3545;     /* Error Red */
   --aveva-white: #FFFFFF;
+  
+  /* Added font variables */
+  --aveva-heading-font: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  --aveva-body-font: 'Arial', sans-serif;
+}
+
+/* Enhanced chart title styling */
+.chart-title {
+  font-family: var(--aveva-heading-font);
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--aveva-primary);
+  letter-spacing: 0.5px;
+  position: relative;
+  padding-left: 12px;
+  margin-bottom: 15px !important;
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
+}
+
+.chart-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 80%;
+  width: 4px;
+  background: linear-gradient(to bottom, var(--aveva-primary), var(--aveva-accent));
+  border-radius: 2px;
 }
 
 /* Dashboard Layout */
@@ -273,25 +302,18 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  background-color: rgba(0, 79, 139, 0.06);
 }
 
 .chart-control-btn:hover {
-  background: #f5f5f5;
-  color: #004f8b;
+  background-color: rgba(0, 79, 139, 0.12);
+  color: var(--aveva-primary);
+  transform: translateY(-1px);
 }
 
 /* Make material icons in chart controls slightly larger */
 .chart-control-btn .material-icons {
   font-size: 20px;
-}
-
-/* Chart container with optimized spacing and positioning */
-.chart-container {
-  margin-top: 10px;
-  height: 400px !important;
-  position: relative;
-  width: calc(100% + 15px); /* Extend chart width beyond container */
-  margin-left: -15px; /* Move chart left to fill the space */
 }
 
 /* Responsive adjustments */

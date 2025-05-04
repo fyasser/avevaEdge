@@ -7,7 +7,7 @@ const ChartDateFilter = ({
   data, 
   dateField = 'Time_Stamp', 
   onDateFilterChange,
-  title = 'Filter by Date' 
+  title = 'Date' 
 }) => {
   const [dateOptions, setDateOptions] = useState([]);
   
@@ -40,7 +40,7 @@ const ChartDateFilter = ({
         const date = new Date(dateStr);
         options.push({
           value: dateStr,
-          label: format(date, 'MMM dd, yyyy')
+          label: format(date, 'M/d/yy') // Changed to more compact format: 5/4/25 instead of May 4, 2025
         });
       });
       
