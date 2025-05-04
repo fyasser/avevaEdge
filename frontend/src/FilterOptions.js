@@ -14,6 +14,9 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
     comparisonOperator: 'gt' // Default to greater than
   });
 
+  // State for aggregation filter
+  const [aggregation, setAggregation] = useState('none');
+
   // State for filter status and activity
   const [isFiltering, setIsFiltering] = useState(false);
   const [filterApplied, setFilterApplied] = useState(false);
@@ -34,6 +37,12 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
       [e.target.name]: e.target.value
     });
     setFilterApplied(false); // Mark filters as changed but not applied
+  };
+
+  // Handle aggregation changes
+  const handleAggregationChange = (e) => {
+    setAggregation(e.target.value);
+    setFilterApplied(false);
   };
 
   // Apply date preset
@@ -75,7 +84,7 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
       target: { name: 'end', value: endDate }
     });
     
-    // Reset additional filters
+    // Reset additional filters and aggregation
     setAdditionalFilters({
       minValue: '',
       maxValue: '',
@@ -83,6 +92,7 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
       threshold: '',
       comparisonOperator: 'gt'
     });
+    setAggregation('none');
 
     // Apply the reset filters immediately
     setTimeout(() => {
@@ -93,7 +103,11 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
   // Apply filters and fetch data
   const applyFilters = () => {
     setIsFiltering(true);
-    fetchFilteredData(additionalFilters);
+    // Include the aggregation setting in the additionalFilters object
+    fetchFilteredData({
+      ...additionalFilters,
+      aggregation: aggregation
+    });
     setFilterApplied(true);
     setFilterTimestamp(new Date());
     
@@ -276,6 +290,22 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
             <div className="data-filter-options">
               <div className="filter-row">
                 <div className="form-field">
+                  <label>Aggregation:</label>
+                  <select
+                    name="aggregation"
+                    value={aggregation}
+                    onChange={handleAggregationChange}
+                  >
+                    <option value="none">None</option>
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="filter-row">
+                <div className="form-field">
                   <label>Filter Field:</label>
                   <select
                     name="filterField"
@@ -284,7 +314,7 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
                   >
                     <option value="rTotalQ">Flow</option>
                     <option value="rTotalQPercentage">Pressure</option>
-                    <option value="counter">System Efficiency</option>
+                    <option value="systemFluidState">System Fluid State</option>
                   </select>
                 </div>
                 
@@ -338,7 +368,7 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
                 <div className="filter-help">
                   Alert when {additionalFilters.filterField === 'rTotalQ' ? 'Flow' : 
                             additionalFilters.filterField === 'rTotalQPercentage' ? 'Pressure' : 
-                            'System Efficiency'} is 
+                            'System Fluid State'} is 
                   {additionalFilters.comparisonOperator === 'gt' ? ' greater than' : ' less than'}
                   {additionalFilters.threshold ? ` ${additionalFilters.threshold}` : ' threshold'}
                 </div>

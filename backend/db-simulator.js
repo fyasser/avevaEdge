@@ -1,162 +1,212 @@
-// Database Simulator that provides realistic-looking data
-// when the actual SQL Server connection fails
+// Database simulator for when the SQL Server connection is unavailable
+// This provides simulated data that mimics the structure of the TREND001 table
 
-function generateRandomData(count = 1000) {
-  const data = [];
-  const now = new Date();
-  
-  // Generate data points covering multiple days
-  for (let i = 0; i < count; i++) {
-    // Each data point is 15 minutes apart
-    const timestamp = new Date(now.getTime() - (i * 15 * 60 * 1000));
-    
-    // Base value with sinusoidal pattern to simulate real data
-    const hourOfDay = timestamp.getHours() + timestamp.getMinutes() / 60;
-    const dayFactor = Math.sin(hourOfDay / 24 * Math.PI * 2);
-    
-    // Add some randomization for realism
-    const randomFactor = Math.random() * 0.3 - 0.15;
-    
-    // Flow rate (rTotalQ) - varies between 100-300
-    const flowBase = 200 + (dayFactor * 100);
-    const flow = Math.round((flowBase + (randomFactor * flowBase)) * 100) / 100;
-    
-    // Percentage (rTotalQPercentage) - varies between 40-95
-    const percentageBase = 70 + (dayFactor * 25);
-    const percentage = Math.round((percentageBase + (randomFactor * percentageBase)) * 100) / 100;
-    
-    // Counter - varies between 0-100 with occasional high values
-    const counterBase = 50 + (dayFactor * 40);
-    const counter = Math.round((counterBase + (randomFactor * counterBase)) * 100) / 100;
-    
-    data.push({
-      Time_Stamp: timestamp.toISOString(),
-      rTotalQ: flow,
-      rTotalQPercentage: percentage,
-      counter: counter,
-      // Include any other fields that might be expected by the frontend
-      pumpId: 1,
-      flowRate: flow * 0.8,
-      pressure: percentage * 0.5,
-      temperature: 20 + (5 * Math.random()),
-      status: Math.random() > 0.05 ? 'Running' : 'Warning'
-    });
-  }
-  
-  return data;
-}
+const { EventEmitter } = require('events');
 
-function getHistoricalData(hoursBack = 168, interval = 15) {
-  const data = [];
-  const now = new Date();
-  const pointsCount = (hoursBack * 60) / interval;
-  
-  for (let i = 0; i < pointsCount; i++) {
-    const timestamp = new Date(now.getTime() - (i * interval * 60 * 1000));
+// In-memory data store for simulated database records
+const simulatedRecords = [];
+const simulatedPool = new EventEmitter();
+let isSimulating = false;
+
+// Generate dates between start and end dates
+function generateDateRange(startDate, endDate, intervalMinutes = 15) {
+    const dates = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
     
-    // Create pattern with morning peak, midday plateau, and evening peak
-    const hourOfDay = timestamp.getHours();
-    let baseFactor;
-    
-    if (hourOfDay >= 6 && hourOfDay < 10) {
-      // Morning ramp up
-      baseFactor = 0.3 + ((hourOfDay - 6) / 4) * 0.7;
-    } else if (hourOfDay >= 10 && hourOfDay < 16) {
-      // Midday plateau
-      baseFactor = 0.8 + (Math.sin((hourOfDay - 10) / 6 * Math.PI) * 0.2);
-    } else if (hourOfDay >= 16 && hourOfDay < 22) {
-      // Evening peak and decline
-      baseFactor = 1.0 - ((hourOfDay - 16) / 6) * 0.6;
-    } else {
-      // Night time low
-      baseFactor = 0.2 + (Math.random() * 0.1);
+    let current = new Date(start);
+    while (current <= end) {
+        dates.push(new Date(current));
+        current.setMinutes(current.getMinutes() + intervalMinutes);
     }
     
-    // Add day of week pattern - weekends have different patterns
-    const dayOfWeek = new Date(timestamp).getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const dayFactor = isWeekend ? 0.7 : 1.0;
-    
-    // Randomization
-    const randomFactor = Math.random() * 0.2 - 0.1;
-    
-    const finalFactor = baseFactor * dayFactor + randomFactor;
-    
-    // Generate correlated data
-    const flow = Math.round((150 + (finalFactor * 200)) * 100) / 100;
-    const percentage = Math.round((60 + (finalFactor * 35)) * 100) / 100;
-    const counter = Math.round((40 + (finalFactor * 60)) * 100) / 100;
-    
-    data.push({
-      Time_Stamp: timestamp.toISOString(),
-      rTotalQ: flow,
-      rTotalQPercentage: percentage,
-      counter: counter,
-      pumpId: 1,
-      flowRate: flow * 0.8,
-      pressure: percentage * 0.5,
-      temperature: 20 + (5 * Math.random()),
-      status: Math.random() > 0.05 ? 'Running' : 'Warning'
-    });
-  }
-  
-  return data.sort((a, b) => new Date(a.Time_Stamp) - new Date(b.Time_Stamp));
+    return dates;
 }
 
-// Function to simulate a specific pump's data
-function getPumpData(pumpId, hoursBack = 168) {
-  const baseData = getHistoricalData(hoursBack);
-  
-  // Adjust data based on pump ID to simulate different characteristics
-  return baseData.map(item => {
-    // Each pump has slightly different characteristics
-    const pumpFactor = (pumpId / 5) + 0.8; // Range from 0.8 to 1.8
+// Generate simulated data for TREND001 table
+function generateSimulatedData(count = 100) {
+    // Clear existing data
+    simulatedRecords.length = 0;
     
-    return {
-      ...item,
-      pumpId: pumpId,
-      rTotalQ: Math.round((item.rTotalQ * pumpFactor) * 100) / 100,
-      rTotalQPercentage: Math.min(100, Math.round((item.rTotalQPercentage * (1 / pumpFactor) * 1.1) * 100) / 100),
-      counter: Math.min(100, Math.round((item.counter * (1 / pumpFactor) * 1.2) * 100) / 100)
+    // Generate dates for the last week, with readings every 15 minutes
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+    
+    const dates = generateDateRange(startDate, endDate);
+    
+    // Generate simulated records
+    let counter = 1;
+    
+    dates.forEach(date => {
+        // Create realistic variations in the data
+        const hourOfDay = date.getHours();
+        // Simulate higher usage during working hours
+        const timeMultiplier = (hourOfDay >= 8 && hourOfDay <= 18) ? 1.5 : 0.7;
+        
+        // Generate random value with realistic patterns
+        const rTotalQ = Math.round((40 + Math.random() * 60) * timeMultiplier);
+        const rTotalQPercentage = Math.min(100, Math.round(rTotalQ / 1.2));
+        
+        simulatedRecords.push({
+            Time_Stamp: date,
+            Time_Stamp_ms: date.getTime(),
+            counter: counter++,
+            rTotalQ: rTotalQ,
+            rTotalQPercentage: rTotalQPercentage
+        });
+    });
+    
+    console.log(`Generated ${simulatedRecords.length} simulated records from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    return simulatedRecords;
+}
+
+// Simulate a SQL pool with request functionality
+simulatedPool.request = function() {
+    const requestObj = {
+        inputs: {},
+        input: function(name, type, value) {
+            this.inputs[name] = value;
+            return this;
+        },
+        query: function(queryString) {
+            return new Promise((resolve, reject) => {
+                try {
+                    console.log('Executing simulated query:', queryString);
+                    console.log('With parameters:', this.inputs);
+                    
+                    // Start with all records
+                    let filteredRecords = [...simulatedRecords];
+                    
+                    // Apply filters based on input parameters
+                    if (this.inputs.start) {
+                        filteredRecords = filteredRecords.filter(r => 
+                            r.Time_Stamp >= new Date(this.inputs.start));
+                    }
+                    
+                    if (this.inputs.end) {
+                        filteredRecords = filteredRecords.filter(r => 
+                            r.Time_Stamp <= new Date(this.inputs.end));
+                    }
+                    
+                    if (this.inputs.lastPoll) {
+                        filteredRecords = filteredRecords.filter(r => 
+                            r.Time_Stamp > new Date(this.inputs.lastPoll));
+                    }
+                    
+                    // Check for field-specific filters (minValue, maxValue, threshold)
+                    let filterField = null;
+                    
+                    // Extract filter field from query
+                    if (queryString.includes('rTotalQ >=') || 
+                        queryString.includes('rTotalQ <=') || 
+                        queryString.includes('rTotalQ >') || 
+                        queryString.includes('rTotalQ <')) {
+                        filterField = 'rTotalQ';
+                    } else if (queryString.includes('rTotalQPercentage >=') || 
+                               queryString.includes('rTotalQPercentage <=') || 
+                               queryString.includes('rTotalQPercentage >') || 
+                               queryString.includes('rTotalQPercentage <')) {
+                        filterField = 'rTotalQPercentage';
+                    }
+                    
+                    if (filterField) {
+                        if (this.inputs.minValue !== undefined) {
+                            filteredRecords = filteredRecords.filter(r => 
+                                r[filterField] >= parseFloat(this.inputs.minValue));
+                        }
+                        
+                        if (this.inputs.maxValue !== undefined) {
+                            filteredRecords = filteredRecords.filter(r => 
+                                r[filterField] <= parseFloat(this.inputs.maxValue));
+                        }
+                        
+                        if (this.inputs.threshold !== undefined) {
+                            const operator = queryString.includes(filterField + ' <') ? '<' : '>';
+                            if (operator === '<') {
+                                filteredRecords = filteredRecords.filter(r => 
+                                    r[filterField] < parseFloat(this.inputs.threshold));
+                            } else {
+                                filteredRecords = filteredRecords.filter(r => 
+                                    r[filterField] > parseFloat(this.inputs.threshold));
+                            }
+                        }
+                    }
+                    
+                    // Handle sorting
+                    if (queryString.includes('ORDER BY Time_Stamp DESC')) {
+                        filteredRecords.sort((a, b) => b.Time_Stamp - a.Time_Stamp);
+                    } else if (queryString.includes('ORDER BY Time_Stamp ASC')) {
+                        filteredRecords.sort((a, b) => a.Time_Stamp - b.Time_Stamp);
+                    }
+                    
+                    resolve({
+                        recordset: filteredRecords
+                    });
+                } catch (err) {
+                    console.error('Simulated query error:', err);
+                    reject(err);
+                }
+            });
+        }
     };
-  });
-}
+    return requestObj;
+};
 
-// Generate summary data for all pumps
-function getSummaryData() {
-  const pumps = [1, 2, 3, 4, 5];
-  const summary = [];
-  
-  pumps.forEach(pumpId => {
-    const pumpData = getPumpData(pumpId, 2); // Last 2 hours
-    
-    // Calculate averages
-    const avgFlow = pumpData.reduce((sum, item) => sum + item.rTotalQ, 0) / pumpData.length;
-    const avgPercentage = pumpData.reduce((sum, item) => sum + item.rTotalQPercentage, 0) / pumpData.length;
-    const avgCounter = pumpData.reduce((sum, item) => sum + item.counter, 0) / pumpData.length;
-    
-    // Last reading
-    const lastReading = pumpData[0];
-    
-    summary.push({
-      pumpId,
-      avgFlow: Math.round(avgFlow * 100) / 100,
-      avgPercentage: Math.round(avgPercentage * 100) / 100,
-      avgCounter: Math.round(avgCounter * 100) / 100,
-      lastFlow: lastReading.rTotalQ,
-      lastPercentage: lastReading.rTotalQPercentage,
-      lastCounter: lastReading.counter,
-      lastTimestamp: lastReading.Time_Stamp,
-      status: Math.random() > 0.1 ? 'Running' : 'Warning'
-    });
-  });
-  
-  return summary;
-}
-
+// API for the database simulator
 module.exports = {
-  generateRandomData,
-  getHistoricalData,
-  getPumpData,
-  getSummaryData
+    // Initialize the database simulator with optional data count
+    initSimulator: (dataCount = 1000) => {
+        if (!isSimulating) {
+            generateSimulatedData(dataCount);
+            isSimulating = true;
+            console.log(`Database simulator initialized with ${simulatedRecords.length} records`);
+        }
+        return simulatedRecords;
+    },
+    
+    // Get the simulated pool that can be used in place of the SQL connection pool
+    getSimulatedPool: () => {
+        if (!isSimulating) {
+            module.exports.initSimulator();
+        }
+        console.log('Using simulated database pool');
+        return simulatedPool;
+    },
+    
+    // Add new simulated records (for testing data updates)
+    addSimulatedRecords: (count = 5) => {
+        const lastRecord = simulatedRecords[simulatedRecords.length - 1];
+        const lastDate = lastRecord ? new Date(lastRecord.Time_Stamp) : new Date();
+        let counter = lastRecord ? lastRecord.counter + 1 : 1;
+        
+        const newRecords = [];
+        for (let i = 0; i < count; i++) {
+            const date = new Date(lastDate);
+            date.setMinutes(date.getMinutes() + 15 * (i + 1));
+            
+            const hourOfDay = date.getHours();
+            const timeMultiplier = (hourOfDay >= 8 && hourOfDay <= 18) ? 1.5 : 0.7;
+            const rTotalQ = Math.round((40 + Math.random() * 60) * timeMultiplier);
+            const rTotalQPercentage = Math.min(100, Math.round(rTotalQ / 1.2));
+            
+            const newRecord = {
+                Time_Stamp: date,
+                Time_Stamp_ms: date.getTime(),
+                counter: counter++,
+                rTotalQ: rTotalQ,
+                rTotalQPercentage: rTotalQPercentage
+            };
+            
+            newRecords.push(newRecord);
+            simulatedRecords.push(newRecord);
+        }
+        
+        return newRecords;
+    },
+    
+    // Get all simulated records
+    getAllRecords: () => {
+        return simulatedRecords;
+    }
 };

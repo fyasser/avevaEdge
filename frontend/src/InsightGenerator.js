@@ -1,4 +1,5 @@
 import React from 'react';
+import { getFluidStateDescription } from './utils/chartInstanceManager';
 
 /**
  * Simplified InsightGenerator component that analyzes operational data and provides
@@ -27,11 +28,17 @@ const InsightGenerator = ({ data, thresholds = {} }) => {
   // Calculate key statistics - simplified to essential calculations
   const flowValues = data.map(item => item.rTotalQ);
   const pressureValues = data.map(item => item.rTotalQPercentage);
-  const efficiencyValues = data.map(item => item.counter);
+  const efficiencyValues = data.map(item => item.flowPressureIndex);
+  const systemFluidStates = data.map(item => item.systemFluidState || item.counter || 0);
 
   const avgFlow = flowValues.reduce((a, b) => a + b, 0) / flowValues.length;
   const avgPressure = pressureValues.reduce((a, b) => a + b, 0) / pressureValues.length;
   const avgEfficiency = efficiencyValues.reduce((a, b) => a + b, 0) / efficiencyValues.length;
+  
+  // Calculate average system fluid state
+  const avgSystemFluidState = systemFluidStates.reduce((a, b) => a + b, 0) / systemFluidStates.length;
+  const currentFluidState = Math.round(avgSystemFluidState) % 5;
+  const fluidStateInfo = getFluidStateDescription(currentFluidState);
   
   // Find max and min values - simplified calculations
   const maxFlow = Math.max(...flowValues);
@@ -52,6 +59,15 @@ const InsightGenerator = ({ data, thresholds = {} }) => {
   // Generate insights based on analysis - reduced to just 2-3 key insights
   const insights = [];
   
+  // System Fluid State insight - always show this insight
+  insights.push({
+    type: 'info',
+    title: 'Current System Fluid State',
+    description: `The system fluid is currently in a ${fluidStateInfo.description.toLowerCase()} state (${currentFluidState}/4).`,
+    recommendation: getFluidStateRecommendation(currentFluidState),
+    icon: 'opacity'
+  });
+
   // Flow insight - just one key insight instead of multiple
   if (!isFlowStable && flowVariationPercent > operationalThresholds.flowVariation * 1.5) {
     insights.push({
@@ -78,15 +94,15 @@ const InsightGenerator = ({ data, thresholds = {} }) => {
   if (lowEfficiencyPercentage > 30) {
     insights.push({
       type: 'warning',
-      title: 'Low System Efficiency',
-      description: `System efficiency below minimum ${lowEfficiencyPercentage.toFixed(1)}% of time`,
+      title: 'Low System Fluid State',
+      description: `System fluid state below minimum ${lowEfficiencyPercentage.toFixed(1)}% of time`,
       recommendation: 'Schedule maintenance check',
       icon: 'trending_down'
     });
   }
 
-  // If no issues found, add a simple "all good" insight
-  if (insights.length === 0) {
+  // If no issues found (except fluid state info), add a simple "all good" insight
+  if (insights.length === 1) {
     insights.push({
       type: 'success',
       title: 'System Operating Normally',
@@ -124,5 +140,27 @@ const InsightGenerator = ({ data, thresholds = {} }) => {
     </div>
   );
 };
+
+/**
+ * Generate fluid state recommendations based on current fluid state
+ * @param {number} fluidState - The current fluid state (0-4)
+ * @returns {string} Recommendation text
+ */
+function getFluidStateRecommendation(fluidState) {
+  switch (fluidState) {
+    case 0:
+      return "Solid state detected - Check for flow blockages and consider heating system to increase flow.";
+    case 1:
+      return "Semi-solid state - Monitor heating system performance and pump pressure to ensure proper flow.";
+    case 2:
+      return "Slurry state - Ensure proper mixing and pump configuration to prevent settling.";
+    case 3:
+      return "Liquid state - System is operating in optimal flow conditions. Maintain current parameters.";
+    case 4:
+      return "Gaseous state - Monitor for cavitation and verify pressure settings to prevent system damage.";
+    default:
+      return "Monitor system fluid state for changes.";
+  }
+}
 
 export default InsightGenerator;

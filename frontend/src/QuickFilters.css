@@ -1,0 +1,126 @@
+.quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+.filter-group {
+  min-width: 180px;
+  flex: 1;
+}
+
+.filter-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #495057;
+}
+
+.filter-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-select:hover {
+  border-color: #adb5bd;
+}
+
+.filter-select:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Pill style - alternate style */
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  background-color: #e9ecef;
+  border: 1px solid #ced4da;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-pill.active {
+  background-color: #0d6efd;
+  color: white;
+  border-color: #0d6efd;
+}
+
+.filter-pill:hover:not(.active) {
+  background-color: #dee2e6;
+}
+
+/* Badge for filter with count */
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  margin-left: 8px;
+  border-radius: 10px;
+  background-color: #6c757d;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.active .filter-badge {
+  background-color: rgba(255, 255, 255, 0.5);
+  color: #0d6efd;
+}
+
+/* Status indicator for applied filters */
+.filter-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  margin-left: auto;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  background-color: #d4edda;
+  color: #155724;
+}
+
+/* Loading state */
+.filter-loading .filter-select {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Make responsive */
+@media (max-width: 768px) {
+  .quick-filters {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+}

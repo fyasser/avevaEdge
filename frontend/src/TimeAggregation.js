@@ -1,45 +1,64 @@
 import React from 'react';
+import './TimeAggregation.css';
 
-/**
- * Time Aggregation component provides options to view data aggregated by different time intervals
- * 
- * @param {Object} props - Component properties
- * @param {string} props.currentValue - The currently selected aggregation level
- * @param {Function} props.onChange - Callback when aggregation changes
- * @param {Array} props.options - Custom options to display (optional)
- */
-const TimeAggregation = ({ currentValue = 'raw', onChange, options }) => {
-  // Default time aggregation options if none provided
-  const defaultOptions = [
-    { value: 'raw', label: 'Raw Data' },
-    { value: 'minute', label: 'Per Minute' },
-    { value: '5minute', label: '5 Minutes' },
-    { value: '15minute', label: '15 Minutes' },
-    { value: 'hour', label: 'Hourly' },
-    { value: 'day', label: 'Daily' }
-  ];
-
-  // Use provided options or defaults
-  const aggregationOptions = options || defaultOptions;
+function TimeAggregation({ aggregationLevel, setAggregationLevel }) {
+  // Handle aggregation level change
+  const handleAggregationChange = (e) => {
+    setAggregationLevel(e.target.value);
+  };
 
   return (
-    <div className="time-aggregation">
-      <label className="aggregation-label">
-        View data:
-        <select 
-          value={currentValue}
-          onChange={(e) => onChange(e.target.value)}
-          className="aggregation-select"
-        >
-          {aggregationOptions.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+    <div className="time-aggregation-container">
+      <h3 className="aggregation-title">Time Aggregation</h3>
+      
+      <div className="aggregation-options">
+        <label className="aggregation-option">
+          <input
+            type="radio"
+            name="aggregationLevel"
+            value="minute"
+            checked={aggregationLevel === 'minute'}
+            onChange={handleAggregationChange}
+          />
+          <span className="radio-label">Minute</span>
+        </label>
+        
+        <label className="aggregation-option">
+          <input
+            type="radio"
+            name="aggregationLevel"
+            value="hour"
+            checked={aggregationLevel === 'hour'}
+            onChange={handleAggregationChange}
+          />
+          <span className="radio-label">Hour</span>
+        </label>
+        
+        <label className="aggregation-option">
+          <input
+            type="radio"
+            name="aggregationLevel"
+            value="day"
+            checked={aggregationLevel === 'day'}
+            onChange={handleAggregationChange}
+          />
+          <span className="radio-label">Day</span>
+        </label>
+      </div>
+      
+      <div className="aggregation-info">
+        {aggregationLevel === 'minute' && (
+          <p>Viewing raw data at minute level</p>
+        )}
+        {aggregationLevel === 'hour' && (
+          <p>Data averaged by hour</p>
+        )}
+        {aggregationLevel === 'day' && (
+          <p>Data averaged by day</p>
+        )}
+      </div>
     </div>
   );
-};
+}
 
 export default TimeAggregation;

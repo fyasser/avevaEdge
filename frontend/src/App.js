@@ -7,7 +7,8 @@ import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import io from 'socket.io-client';
 import { 
   destroyAllCharts, 
-  installGlobalErrorPrevention 
+  installGlobalErrorPrevention,
+  getFluidStateDescription 
 } from './utils/chartInstanceManager';
 
 import {
@@ -28,6 +29,7 @@ import ChartCarousel from './ChartCarousel';
 import DataTable from './DataTable';
 import FilterOptions from './FilterOptions';
 import InsightGenerator from './InsightGenerator';
+// Removed import of QuickFilters
 import './InsightGenerator.css';
 
 // Register Chart.js components
@@ -72,7 +74,8 @@ function App() {
     minValue: '',
     maxValue: '',
     threshold: '',
-    comparisonOperator: 'gt'
+    comparisonOperator: 'gt',
+    aggregation: 'none' // Ensure aggregation is part of dataFilters state
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -220,7 +223,7 @@ function App() {
     
     // Empty doughnut chart
     setDoughnutChartData({
-      labels: ['System Efficiency', 'Flow', 'Pressure'],
+      labels: ['System Fluid State', 'Flow', 'Pressure'],
       datasets: [{
         data: [0, 0, 0],
         backgroundColor: [
@@ -270,7 +273,7 @@ function App() {
       totalFlow: '0.00',
       totalPressure: '0.00',
       activeSensors: 0,
-      systemEfficiency: '0.00%'
+      systemEfficiency: '0.00'
     });
   };
 
@@ -288,13 +291,25 @@ function App() {
       return;
     }
 
+    // Map the counter property to systemFluidState for each data point
+    const processedData = data.map(item => {
+      return {
+        ...item,
+        // Use counter as systemFluidState if it exists, otherwise keep existing systemFluidState or default to 0
+        systemFluidState: item.counter !== undefined ? item.counter : (item.systemFluidState || 0)
+      };
+    });
+
+    // Sort data by timestamp in ascending order for proper chart display
+    const sortedData = [...processedData].sort((a, b) => new Date(a.Time_Stamp) - new Date(b.Time_Stamp));
+
     // Update Bar Chart data
     const formattedChartData = {
-      labels: data.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
+      labels: sortedData.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
       datasets: [
         {
           label: 'Flow',
-          data: data.map((item) => item.rTotalQ),
+          data: sortedData.map((item) => item.rTotalQ),
           backgroundColor: 'rgba(75, 192, 192, 0.6)',
         },
       ],
@@ -303,13 +318,13 @@ function App() {
     
     // Update Doughnut Chart data - renamed sensors to System Efficiency
     const formattedDoughnutChartData = {
-      labels: ['System Efficiency', 'Flow', 'Pressure'],
+      labels: ['System Fluid State', 'Flow', 'Pressure'],
       datasets: [
         {
           data: [
-            data.reduce((sum, item) => sum + item.counter, 0),
-            data.reduce((sum, item) => sum + item.rTotalQ, 0),
-            data.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
+            sortedData.reduce((sum, item) => sum + item.systemFluidState, 0),
+            sortedData.reduce((sum, item) => sum + item.rTotalQ, 0),
+            sortedData.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
           ],
           backgroundColor: [
             'rgba(54, 162, 235, 0.6)', // Blue for System Efficiency
@@ -323,18 +338,18 @@ function App() {
     
     // Update Line Chart data with renamed labels and removing System Efficiency
     const formattedLineChartData = {
-      labels: data.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
+      labels: sortedData.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
       datasets: [
         {
           label: 'Flow',
-          data: data.map((item) => item.rTotalQ),
+          data: sortedData.map((item) => item.rTotalQ),
           borderColor: 'rgba(75, 192, 192, 1)',
           backgroundColor: 'rgba(75, 192, 192, 0.2)',
           fill: true,
         },
         {
           label: 'Pressure',
-          data: data.map((item) => item.rTotalQPercentage),
+          data: sortedData.map((item) => item.rTotalQPercentage),
           borderColor: 'rgba(255, 99, 132, 1)',
           backgroundColor: 'rgba(255, 99, 132, 0.2)',
           fill: true,
@@ -347,17 +362,17 @@ function App() {
     const formattedScatterChartData = {
       datasets: [
         {
-          label: 'Flow vs Pressure (size: System Efficiency)',
-          data: data.map((item) => ({
+          label: 'Flow vs Pressure (size: System Fluid State)',
+          data: sortedData.map((item) => ({
             x: item.rTotalQ,
             y: item.rTotalQPercentage,
-            r: Math.max(3, Math.min(10, item.counter / 10)), // Size based on System Efficiency (scaled)
-            efficiency: item.counter,
+            r: Math.max(3, Math.min(10, item.systemFluidState / 10)), // Size based on System Fluid State (scaled)
+            efficiency: item.systemFluidState,
             timestamp: format(new Date(item.Time_Stamp), 'MMM dd HH:mm:ss')
           })),
-          backgroundColor: data.map(item => {
+          backgroundColor: sortedData.map(item => {
             // Color points based on efficiency (more efficient = more blue)
-            const efficiency = item.counter;
+            const efficiency = item.systemFluidState;
             if (efficiency > 75) {
               return 'rgba(0, 153, 255, 0.7)'; // High efficiency - blue
             } else if (efficiency > 50) {
@@ -368,24 +383,26 @@ function App() {
               return 'rgba(255, 87, 51, 0.7)'; // Very low efficiency - red
             }
           }),
-          pointRadius: data.map(item => Math.max(3, Math.min(10, item.counter / 10))),
-          pointHoverRadius: data.map(item => Math.max(5, Math.min(15, item.counter / 8))),
+          pointRadius: sortedData.map(item => Math.max(3, Math.min(10, item.systemFluidState / 10))),
+          pointHoverRadius: sortedData.map(item => Math.max(5, Math.min(15, item.systemFluidState / 8))),
         },
       ],
     };
     setScatterChartData(formattedScatterChartData);
     
     // Calculate and update metrics
-    const totalFlow = data.reduce((sum, item) => sum + item.rTotalQ, 0);
-    const totalPressure = data.reduce((sum, item) => sum + item.rTotalQPercentage, 0);
-    const avgSystemEfficiency = data.length > 0 ? 
-      data.reduce((sum, item) => sum + item.counter, 0) / data.length : 0;
+    const avgFlow = sortedData.length > 0 ?
+      sortedData.reduce((sum, item) => sum + (item.rTotalQ || 0), 0) / sortedData.length : 0;
+    const avgPressure = sortedData.length > 0 ?
+      sortedData.reduce((sum, item) => sum + (item.rTotalQPercentage || 0), 0) / sortedData.length : 0;
+    const avgSystemFluidState = sortedData.length > 0 ? 
+      sortedData.reduce((sum, item) => sum + (item.systemFluidState || 0), 0) / sortedData.length : 0;
     
     setMetrics({
-      totalFlow: totalFlow.toFixed(2),
-      totalPressure: totalPressure.toFixed(2),
-      systemEfficiency: avgSystemEfficiency.toFixed(2) + '%',
-      activeSensors: data.reduce((max, item) => Math.max(max, item.counter), 0) // Use max counter as sensor count
+      totalFlow: avgFlow.toFixed(2),
+      totalPressure: avgPressure.toFixed(2),
+      systemEfficiency: isNaN(avgSystemFluidState) ? '0.00%' : avgSystemFluidState.toFixed(2),
+      activeSensors: sortedData.reduce((max, item) => Math.max(max, item.systemFluidState || 0), 0) // Use max systemFluidState as sensor count
     });
   };
 
@@ -493,7 +510,11 @@ function App() {
 
   // Handle additional filter changes
   const handleAdditionalFilterChange = (filterData) => {
-    setDataFilters(filterData);
+    // Update the dataFilters state with all received filter data, including aggregation
+    setDataFilters({
+      ...dataFilters,
+      ...filterData
+    });
   };
 
   // Download page as HTML report
@@ -1539,33 +1560,38 @@ function App() {
           <div className="metric-card">
             <span className="material-icons">water_drop</span>
             <div className="metric-info">
-              <h3>Total Flow</h3>
-              <p>{metrics.totalFlow}</p>
+              <h3>Average Flow</h3>
+              <p>{metrics.totalFlow} m³/h</p>
             </div>
           </div>
           <div className="metric-card">
             <span className="material-icons">speed</span>
             <div className="metric-info">
-              <h3>Total Pressure</h3>
-              <p>{metrics.totalPressure}</p>
+              <h3>Average Pressure</h3>
+              <p>{metrics.totalPressure} kPa</p>
             </div>
           </div>
           <div className="metric-card">
             <span className="material-icons">trending_up</span>
             <div className="metric-info">
-              <h3>System Efficiency</h3>
-              <p>{metrics.systemEfficiency}</p>
+              <h3>System Fluid State</h3>
+              <p>{isNaN(parseFloat(metrics.systemEfficiency)) ? 
+                'Unknown' : 
+                getFluidStateDescription(parseFloat(metrics.systemEfficiency)).description}
+              </p>
             </div>
           </div>
         </section>
-
-        {/* Add Filter Panel Here - This ensures it's always visible */}
+        
+        {/* Main Filter Panel - Ensure it receives dataFilters and the handler */}
         <section className="filter-section main-filter-panel">
           <FilterOptions
             selectedCharts={selectedCharts}
             handleChartSelection={handleChartSelection}
             dateRange={dateRange}
             handleDateRangeChange={handleDateRangeChange}
+            dataFilters={dataFilters} // Pass the full dataFilters state
+            handleAdditionalFilterChange={handleAdditionalFilterChange} // Pass the handler
             fetchFilteredData={fetchFilteredData}
             downloadPage={downloadPage}
           />
@@ -1602,7 +1628,17 @@ function App() {
               
               <div className="charts-row">
                 <div className="chart-box">
-                  <h3>Pressure Over Time</h3>
+                  <h3>
+                    Pressure Over Time
+                    <div className="chart-controls">
+                      <button className="chart-control-btn" title="Download as PNG">
+                        <span className="material-icons">file_download</span>
+                      </button>
+                      <button className="chart-control-btn" title="View full screen">
+                        <span className="material-icons">fullscreen</span>
+                      </button>
+                    </div>
+                  </h3>
                   <ReportChart 
                     data={tableData}
                     type="line"
@@ -1610,10 +1646,22 @@ function App() {
                     yField="rTotalQPercentage" 
                     title="Pressure"
                     style={{ width: '100%', height: '100%' }}
+                    dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
+                    aggregation={dataFilters.aggregation || 'none'} 
                   />
                 </div>
                 <div className="chart-box">
-                  <h3>Flow Over Time</h3>
+                  <h3>
+                    Flow Over Time
+                    <div className="chart-controls">
+                      <button className="chart-control-btn" title="Download as PNG">
+                        <span className="material-icons">file_download</span>
+                      </button>
+                      <button className="chart-control-btn" title="View full screen">
+                        <span className="material-icons">fullscreen</span>
+                      </button>
+                    </div>
+                  </h3>
                   <ReportChart 
                     data={tableData}
                     type="line"
@@ -1621,6 +1669,8 @@ function App() {
                     yField="rTotalQ"
                     title="Flow"
                     style={{ width: '100%', height: '100%' }}
+                    dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
+                    aggregation={dataFilters.aggregation || 'none'} 
                   />
                 </div>
               </div>
@@ -1633,6 +1683,7 @@ function App() {
                       chartData={chartData}
                       doughnutChartData={doughnutChartData}
                       scatterChartData={scatterChartData}
+                      aggregation={dataFilters.aggregation || 'none'} 
                     />
                   </div>
                   <div className="carousel-sidebar">
@@ -1641,6 +1692,8 @@ function App() {
                       handleChartSelection={handleChartSelection}
                       dateRange={dateRange}
                       handleDateRangeChange={handleDateRangeChange}
+                      dataFilters={dataFilters}
+                      handleAdditionalFilterChange={handleAdditionalFilterChange}
                       fetchFilteredData={fetchFilteredData}
                       downloadPage={downloadPage}
                     />
@@ -1670,24 +1723,30 @@ function App() {
                     <th>Timestamp</th>
                     <th>Flow</th>
                     <th>Pressure</th>
-                    <th>System Efficiency</th>
+                    <th>System Fluid State</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tableData
                     .filter((row) => 
                       new Date(row.Time_Stamp).toLocaleString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      row.rTotalQ.toString().includes(searchTerm) ||
-                      row.rTotalQPercentage.toString().includes(searchTerm) ||
-                      row.counter.toString().includes(searchTerm)
+                      (row.rTotalQ?.toString() || '').includes(searchTerm) ||
+                      (row.rTotalQPercentage?.toString() || '').includes(searchTerm) ||
+                      (row.systemFluidState?.toString() || '').includes(searchTerm)
                     )
                     .slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
                     .map((row, index) => (
                       <tr key={index}>
                         <td>{new Date(row.Time_Stamp).toLocaleString()}</td>
-                        <td>{row.rTotalQ.toFixed(2)}</td>
-                        <td>{row.rTotalQPercentage.toFixed(2)}</td>
-                        <td>{row.counter.toFixed(2)}%</td>
+                        <td>{row.rTotalQ !== undefined ? row.rTotalQ.toFixed(2) : 'N/A'}</td>
+                        <td>{row.rTotalQPercentage !== undefined ? row.rTotalQPercentage.toFixed(2) : 'N/A'}</td>
+                        <td>
+                          {row.systemFluidState !== undefined ? (
+                            <span style={{ color: getFluidStateDescription(row.systemFluidState).color }}>
+                              {getFluidStateDescription(row.systemFluidState).description}
+                            </span>
+                          ) : 'N/A'}
+                        </td>
                       </tr>
                     ))}
                 </tbody>
