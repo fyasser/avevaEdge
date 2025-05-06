@@ -239,7 +239,7 @@
 }
 
 .primary-button {
-  background-color: #0d6efd;
+  background-color: #0d6dfdc0;
   color: white;
 }
 
@@ -248,7 +248,7 @@
 }
 
 .secondary-button {
-  background-color: #6c757d;
+  background-color: #a1abb3;
   color: white;
 }
 
@@ -257,7 +257,7 @@
 }
 
 .accent-button {
-  background-color: #198754;
+  background-color: #51c691;
   color: white;
 }
 

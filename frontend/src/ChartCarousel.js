@@ -43,14 +43,14 @@ ChartJS.register(
 
 // Define a consistent color palette for all charts
 const chartColorScheme = {
-  primary: 'rgba(0, 79, 139, 1)',       // AVEVA blue
+  primary: 'rgb(9, 56, 92)',       // AVEVA blue
   primaryLight: 'rgba(0, 79, 139, 0.7)', // AVEVA blue lighter
-  secondary:'rgb(122, 55, 55)',     // Secondary blue
-  secondaryLight: 'rgba(104, 127, 176, 0.7)',
-  accent1: 'rgb(48, 106, 183)',      // Teal
-  accent1Light: 'rgba(133, 207, 207, 0.4)',
-  accent2: 'rgb(122, 55, 55)',      // Red
-  accent2Light: 'rgba(206, 13, 48, 0.88)',
+  secondary:'rgb(7, 92, 158)',     // Secondary blue
+  secondaryLight: 'rgb(241, 0, 0)',
+  accent1: 'rgb(6, 56, 122)',      // Teal
+  accent1Light: 'rgba(133, 207, 207, 0.12)',
+  accent2: 'rgb(109, 40, 40)',      // Red
+  accent2Light: 'rgba(242, 147, 165, 0.88)',
   accent3: 'rgba(255, 159, 64, 1)',      // Orange
   accent3Light: 'rgba(255, 159, 64, 0.4)',
   accent4: 'rgba(153, 102, 255, 1)',     // Purple

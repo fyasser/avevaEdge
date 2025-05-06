@@ -51,6 +51,44 @@ ChartJS.register(
 // Install global error prevention as early as possible
 installGlobalErrorPrevention();
 
+// Helper function to safely parse numeric values
+const parseNumericValue = (value, defaultValue = null) => { // Default to null
+  if (value === null || value === undefined || String(value).trim() === '' || String(value).toUpperCase() === 'N/A') {
+    return defaultValue;
+  }
+  const numericValue = parseFloat(String(value).replace(/,/g, '')); // Handle thousands separators if any
+  return isNaN(numericValue) ? defaultValue : numericValue;
+};
+
+// New helper function to process individual data items
+const processDataItem = (item) => {
+  // Step 1: Map counter to systemFluidState
+  // If item.counter exists, use it.
+  // Else, if item.systemFluidState exists, use it.
+  // Else, set to null.
+  let rawSystemFluidState;
+  if (item.counter !== undefined) {
+    rawSystemFluidState = item.counter;
+  } else if (item.systemFluidState !== undefined) {
+    rawSystemFluidState = item.systemFluidState;
+  } else {
+    rawSystemFluidState = null; // Explicitly null if neither exists
+  }
+
+  const mappedItem = {
+    ...item, // Spread original item first
+    systemFluidState: rawSystemFluidState // Override systemFluidState with the mapped value
+  };
+
+  // Step 2: Parse numeric values including the potentially remapped systemFluidState
+  return {
+    ...mappedItem,
+    rTotalQ: parseNumericValue(mappedItem.rTotalQ, null),
+    rTotalQPercentage: parseNumericValue(mappedItem.rTotalQPercentage, null),
+    systemFluidState: parseNumericValue(mappedItem.systemFluidState, null)
+  };
+};
+
 function App() {
   const [chartData, setChartData] = useState(null);
   const [tableData, setTableData] = useState([]);
@@ -141,9 +179,10 @@ function App() {
       
       if (data.length > 0) {
         console.log('Sample data record:', data[0]);
-        updateAllChartData(data);
+        const processedData = data.map(processDataItem); // Process data
+        updateAllChartData(processedData);
         setLastUpdate(new Date());
-        setTableData(data);
+        setTableData(processedData);
         setInitialLoadComplete(true);
       } else {
         console.log('No data returned from server for the selected filters');
@@ -160,20 +199,22 @@ function App() {
     socketRef.current.on('new-data', (newData) => {
       if (newData.length > 0) {
         console.log('Received new data:', newData.length, 'records');
-        
+        const processedNewData = newData.map(processDataItem); // Process new data items
+
         // Update the table data with new records
         setTableData(prevData => {
           // Combine new data with existing, avoiding duplicates by using a Map
           const dataMap = new Map();
           
           // Add existing data to map (keyed by timestamp)
+          // Assuming prevData is already processed
           prevData.forEach(item => {
             const key = new Date(item.Time_Stamp).getTime();
             dataMap.set(key, item);
           });
           
-          // Add/overwrite with new data
-          newData.forEach(item => {
+          // Add/overwrite with new processed data
+          processedNewData.forEach(item => {
             const key = new Date(item.Time_Stamp).getTime();
             dataMap.set(key, item);
           });
@@ -182,7 +223,7 @@ function App() {
           const updatedData = Array.from(dataMap.values())
             .sort((a, b) => new Date(b.Time_Stamp) - new Date(a.Time_Stamp));
             
-          // Update all charts with the new combined data
+          // Update all charts with the new combined and processed data
           updateAllChartData(updatedData);
           setLastUpdate(new Date());
           
@@ -311,17 +352,11 @@ function App() {
       return;
     }
   
-    // Map the counter property to systemFluidState for each data point
-    const processedData = data.map(item => {
-      return {
-        ...item,
-        // Use counter as systemFluidState if it exists, otherwise keep existing systemFluidState or default to 0
-        systemFluidState: item.counter !== undefined ? item.counter : (item.systemFluidState || 0)
-      };
-    });
+    // Data is already processed (counter mapped to systemFluidState, and parsed).
+    // No need for an additional mapping step here.
   
     // Sort data by timestamp in ascending order for proper chart display
-    const sortedData = [...processedData].sort((a, b) => new Date(a.Time_Stamp) - new Date(b.Time_Stamp));
+    const sortedData = [...data].sort((a, b) => new Date(a.Time_Stamp) - new Date(b.Time_Stamp));
   
     // Sample data points if there are too many (prevent chart from growing indefinitely)
     const maxPoints = 150; // Maximum number of data points to display
@@ -505,19 +540,16 @@ function App() {
 
       fetch(`http://localhost:5000/api/trend-data?${queryParams.toString()}`)
         .then((response) => response.json())
-        .then((data) => {
-          // Update all charts with the filtered data
-          if (data.length > 0) {
-            updateAllChartData(data);
-            setTableData(data);
-            setLastUpdate(new Date());
-            setInitialLoadComplete(true);
-          } else {
-            console.log('No data returned for the selected filters');
-            setEmptyChartData();
-            setTableData([]);
-          }
+        .then((apiData) => {
+          // Process data using the new utility function
+          const processedData = apiData.map(processDataItem);
+
+          setTableData(processedData); 
+          updateAllChartData(processedData); // Pass the already processed data
+          
           setIsLoading(false);
+          setInitialLoadComplete(true);
+          setLastUpdate(new Date());
         })
         .catch((error) => {
           console.error('Error fetching filtered data:', error);
@@ -1590,8 +1622,9 @@ function App() {
             <div style={{ fontSize: '14px', color: '#666' }}>
               {lastUpdate && `Last update: ${lastUpdate.toLocaleTimeString()}`}
               {!initialLoadComplete && <span style={{ marginLeft: '10px', color: '#007bff' }}>Select dates and apply filters to load data</span>}
-            </div>
-          </div>
+            </div> {/* This closes the div with style={{ fontSize: '14px', ... }} */}
+          </div> {/* This closes the div with style={{ marginRight: 'auto', ... }} */}
+          {/* The erroneous extra </div> that was at error line 1626 has been removed. */}
           <div className="top-bar-icons">
             <span className="material-icons">notifications</span>
             <div className="user-profile">
@@ -1779,75 +1812,24 @@ function App() {
           )}
         </section>
 
-        {/* Data Table Section */}
-        <section className="data-table">
-          <h2>Data Table</h2>
-          {tableData.length > 0 ? (
-            <>
-              <div className="table-controls">
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>Flow</th>
-                    <th>Pressure</th>
-                    <th>System Fluid State</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableData
-                    .filter((row) => 
-                      new Date(row.Time_Stamp).toLocaleString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-                      (row.rTotalQ?.toString() || '').includes(searchTerm) ||
-                      (row.rTotalQPercentage?.toString() || '').includes(searchTerm) ||
-                      (row.systemFluidState?.toString() || '').includes(searchTerm)
-                    )
-                    .slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
-                    .map((row, index) => (
-                      <tr key={index}>
-                        <td>{new Date(row.Time_Stamp).toLocaleString()}</td>
-                        <td>{row.rTotalQ !== undefined ? row.rTotalQ.toFixed(2) : 'N/A'}</td>
-                        <td>{row.rTotalQPercentage !== undefined ? row.rTotalQPercentage.toFixed(2) : 'N/A'}</td>
-                        <td>
-                          {row.systemFluidState !== undefined ? (
-                            <span style={{ color: getFluidStateDescription(row.systemFluidState).color }}>
-                              {getFluidStateDescription(row.systemFluidState).description}
-                            </span>
-                          ) : 'N/A'}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-              <div className="pagination">
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <span>Page {currentPage}</span>
-                <button
-                  onClick={() => setCurrentPage((prev) => prev + 1)}
-                  disabled={currentPage * rowsPerPage >= tableData.length}
-                >
-                  Next
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="no-data-table">
-              <p>No data to display. {!initialLoadComplete ? 'Apply filters to load data.' : 'Try adjusting your filter criteria.'}</p>
-            </div>
-          )}
-        </section>
+        {/* Data Table Section - Updated to use enhanced DataTable component */}
+      <section className="data-table">
+        {tableData.length > 0 ? (
+          <DataTable
+            tableData={tableData}
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            rowsPerPage={rowsPerPage}
+            setRowsPerPage={setRowsPerPage}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+          />
+        ) : (
+          <div className="no-data-table">
+            <p>No data to display. {!initialLoadComplete ? 'Apply filters to load data.' : 'Try adjusting your filter criteria.'}</p>
+          </div>
+        )}
+      </section>
 
         {/* Footer */}
         <footer className="footer">
