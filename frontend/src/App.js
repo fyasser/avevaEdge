@@ -29,6 +29,8 @@ import ChartCarousel from './ChartCarousel';
 import DataTable from './DataTable';
 import FilterOptions from './FilterOptions';
 import InsightGenerator from './InsightGenerator';
+import TimeAggregation from './TimeAggregation'; // Add TimeAggregation to the imports near the top of the file
+import ChartDateFilter from './ChartDateFilter'; // Add ChartDateFilter import near the top of the file if it's not already there
 // Removed import of QuickFilters
 import './InsightGenerator.css';
 
@@ -92,6 +94,18 @@ function App() {
     totalPressure: 0,
     activeSensors: 0,
     systemEfficiency: '0%'
+  });
+
+  // Add this state management for chart-specific aggregation levels
+  const [chartAggregationLevels, setChartAggregationLevels] = useState({
+    pressure: 'none',
+    flow: 'none'
+  });
+
+  // Add state for chart-specific date filters
+  const [chartDateFilters, setChartDateFilters] = useState({
+    pressure: null,
+    flow: null
   });
 
   // Reference to socket.io connection
@@ -531,6 +545,28 @@ function App() {
       ...dataFilters,
       ...filterData
     });
+  };
+
+  // This function will handle aggregation changes for individual charts
+  const handleChartAggregationChange = (chartType, level) => {
+    setChartAggregationLevels(prev => ({
+      ...prev,
+      [chartType]: level
+    }));
+    
+    // Force chart rerenders when aggregation changes
+    setChartRenderKey(Date.now());
+  };
+
+  // Function to handle chart-specific date filter changes
+  const handleChartDateFilterChange = (chartType, dateFilter) => {
+    setChartDateFilters(prev => ({
+      ...prev,
+      [chartType]: dateFilter
+    }));
+    
+    // Force chart rerenders when date filter changes
+    setChartRenderKey(Date.now());
   };
 
   // Download page as HTML report
@@ -1644,10 +1680,21 @@ function App() {
               
               <div className="charts-row">
                 <div className="chart-box">
-                  <h3>
-                    Pressure Over Time
-                    <div className="chart-controls"></div>
-                  </h3>
+                  <div className="chart-header">
+                    <h3>Pressure Over Time</h3>
+                    <div className="chart-controls">
+                      <ChartDateFilter 
+                        data={tableData}
+                        dateField="Time_Stamp"
+                        onDateFilterChange={(dateFilter) => handleChartDateFilterChange('pressure', dateFilter)}
+                        title="Date"
+                      />
+                      <TimeAggregation
+                        aggregationLevel={chartAggregationLevels.pressure}
+                        onAggregationChange={(level) => handleChartAggregationChange('pressure', level)}
+                      />
+                    </div>
+                  </div>
                   <ReportChart 
                     data={tableData}
                     type="line"
@@ -1655,8 +1702,8 @@ function App() {
                     yField="rTotalQPercentage" 
                     title="Pressure"
                     style={{ width: '100%', height: '100%' }}
-                    dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
-                    aggregation={dataFilters.aggregation || 'none'}
+                    dateRange={chartDateFilters.pressure || (dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null)}
+                    aggregation={chartAggregationLevels.pressure || 'none'}
                     key={`pressure-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}`} 
                     options={{
                       plugins: {
@@ -1673,10 +1720,21 @@ function App() {
                   />
                 </div>
                 <div className="chart-box">
-                  <h3>
-                    Flow Over Time
-                    <div className="chart-controls"></div>
-                  </h3>
+                  <div className="chart-header">
+                    <h3>Flow Over Time</h3>
+                    <div className="chart-controls">
+                      <ChartDateFilter 
+                        data={tableData}
+                        dateField="Time_Stamp"
+                        onDateFilterChange={(dateFilter) => handleChartDateFilterChange('flow', dateFilter)}
+                        title="Date"
+                      />
+                      <TimeAggregation
+                        aggregationLevel={chartAggregationLevels.flow}
+                        onAggregationChange={(level) => handleChartAggregationChange('flow', level)}
+                      />
+                    </div>
+                  </div>
                   <ReportChart 
                     data={tableData}
                     type="line"
@@ -1684,8 +1742,8 @@ function App() {
                     yField="rTotalQ"
                     title="Flow"
                     style={{ width: '100%', height: '100%' }}
-                    dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
-                    aggregation={dataFilters.aggregation || 'none'}
+                    dateRange={chartDateFilters.flow || (dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null)}
+                    aggregation={chartAggregationLevels.flow || 'none'}
                     key={`flow-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}`}
                     options={{
                       plugins: {
