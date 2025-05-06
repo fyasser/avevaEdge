@@ -62,7 +62,7 @@ const ChartTimeFilter = ({
       Array.from(timeValues.hours).sort((a, b) => a - b).forEach(hour => {
         options.push({
           value: `hour-${hour}`,
-          label: format(new Date().setHours(hour, 0, 0, 0), 'ha')  // More compact: 3PM instead of 3:00 PM
+          label: format(new Date().setHours(hour, 0, 0, 0), 'h:00 a')  // e.g. 3:00 PM
         });
       });
     } 
@@ -71,7 +71,7 @@ const ChartTimeFilter = ({
         const [hour, minute] = timeStr.split(':').map(Number);
         options.push({
           value: `minute-${timeStr}`,
-          label: format(new Date().setHours(hour, minute, 0, 0), 'h:mm')  // More compact: 3:30 instead of 3:30 PM
+          label: format(new Date().setHours(hour, minute, 0, 0), 'h:mm a')  // e.g. 3:30 PM
         });
       });
     }
@@ -80,7 +80,7 @@ const ChartTimeFilter = ({
         const [hour, minute, second] = timeStr.split(/[.:]/); // Split by either : or .
         options.push({
           value: `second-${timeStr}`,
-          label: format(new Date().setHours(Number(hour), Number(minute), Number(second), 0), 'h:mm:ss')  // More compact: 3:30:45 instead of 3:30:45 PM
+          label: format(new Date().setHours(Number(hour), Number(minute), Number(second), 0), 'h:mm:ss a')  // e.g. 3:30:45 PM
         });
       });
     }
@@ -103,32 +103,14 @@ const ChartTimeFilter = ({
     
     // If changing back to "all", clear any time filters
     if (value === 'all') {
-      onTimeFilterChange({
-        type: 'none',
-        aggregatePoints: false
-      });
-      return;
+      onTimeFilterChange(null);
     }
-    
-    // When selecting a resolution level, automatically set up aggregation
-    // without requiring a specific time selection
-    onTimeFilterChange({
-      type: value, // 'hour', 'minute', or 'second'
-      aggregatePoints: true, // Enable automatic data point averaging
-      granularity: value // Pass the granularity level
-    });
   };
   
   // Handle specific time selection
   const handleTimeValueChange = (value) => {
     if (value === 'all') {
-      // When selecting "All Times" but keeping the resolution level,
-      // still aggregate but don't filter to a specific time
-      onTimeFilterChange({
-        type: selectedTimeResolution,
-        aggregatePoints: true,
-        granularity: selectedTimeResolution
-      });
+      onTimeFilterChange(null);
       return;
     }
     
@@ -140,9 +122,7 @@ const ChartTimeFilter = ({
       const hour = Number(timeStr);
       filter = {
         type: 'hour',
-        hour: hour,
-        aggregatePoints: true,
-        granularity: 'hour'
+        hour: hour
       };
     } 
     else if (type === 'minute') {
@@ -150,9 +130,7 @@ const ChartTimeFilter = ({
       filter = {
         type: 'minute',
         hour: hour,
-        minute: minute,
-        aggregatePoints: true,
-        granularity: 'minute'
+        minute: minute
       };
     }
     else if (type === 'second') {
@@ -161,9 +139,7 @@ const ChartTimeFilter = ({
         type: 'second',
         hour: Number(hour),
         minute: Number(minute),
-        second: Number(second),
-        aggregatePoints: true,
-        granularity: 'second'
+        second: Number(second)
       };
     }
     
@@ -179,19 +155,13 @@ const ChartTimeFilter = ({
         onFilterChange={handleResolutionChange}
       />
       
-      {selectedTimeResolution !== 'all' ? (
-        <div className="time-value-filter">
-          <ChartDropdownFilter
-            title=""
-            filterOptions={timeOptions}
-            initialValue="all"
-            onFilterChange={handleTimeValueChange}
-            className="timing-details-dropdown" // Add special class to target this dropdown
-          />
-        </div>
-      ) : (
-        // Add an empty placeholder div to maintain spacing when second dropdown isn't shown
-        <div className="time-value-filter-placeholder"></div>
+      {selectedTimeResolution !== 'all' && (
+        <ChartDropdownFilter
+          title=""
+          filterOptions={timeOptions}
+          initialValue="all"
+          onFilterChange={handleTimeValueChange}
+        />
       )}
     </div>
   );

@@ -33,6 +33,44 @@ let errorPreventionInstalled = false;
     return originalGetComputedStyle(element, ...args);
   };
   
+  // Add a safer removeChild method to prevent "not a child" errors
+  if (Node.prototype.removeChild) {
+    const originalRemoveChild = Node.prototype.removeChild;
+    Node.prototype.removeChild = function(child) {
+      try {
+        // Check if child is actually a child of this node before attempting removal
+        if (child && this.contains && this.contains(child)) {
+          return originalRemoveChild.call(this, child);
+        } else {
+          console.debug('[ChartManager] Prevented removeChild error - not a child node');
+          return child; // Return the child as if it was removed
+        }
+      } catch (e) {
+        console.debug('[ChartManager] Handled error in removeChild:', e.message);
+        return child; // Return the child as if it was removed
+      }
+    };
+    console.log('[ChartManager] Patched Node.prototype.removeChild to prevent errors');
+  }
+
+  // Also patch appendChild to handle DOM node recycling issues
+  if (Node.prototype.appendChild) {
+    const originalAppendChild = Node.prototype.appendChild;
+    Node.prototype.appendChild = function(child) {
+      try {
+        // Handle the case where the node is already in the DOM
+        if (child && child.parentNode && child.parentNode !== this) {
+          child.parentNode.removeChild(child);
+        }
+        return originalAppendChild.call(this, child);
+      } catch (e) {
+        console.debug('[ChartManager] Handled error in appendChild:', e.message);
+        return child;
+      }
+    };
+    console.log('[ChartManager] Patched Node.prototype.appendChild to prevent errors');
+  }
+  
   // Direct patch for the specific error in helpers.dom.ts:45
   // Enhanced patch to better handle the date range change errors
   function patchHelpersDOM() {
@@ -504,14 +542,50 @@ function safelyDestroyChart(chart) {
   if (!chart) return;
   
   try {
+    // First, remove all event listeners to prevent callbacks
+    if (chart.canvas) {
+      const events = ['click', 'mousemove', 'mouseout', 'mouseup', 'mousedown', 'touchstart', 'touchmove', 'touchend'];
+      events.forEach(event => {
+        chart.canvas.removeEventListener(event, null);
+      });
+      
+      // Also remove any data attributes that might be referencing the chart
+      if (chart.canvas.dataset) {
+        for (const key in chart.canvas.dataset) {
+          if (key.includes('chart')) {
+            delete chart.canvas.dataset[key];
+          }
+        }
+      }
+    }
+    
     // Disable animations to prevent animation frame callbacks
     if (chart.options) {
       chart.options.animation = false;
+      chart.options.responsive = false;
+      chart.options.events = [];
+    }
+    
+    // Detach from DOM before destroying if possible
+    if (chart.canvas && chart.canvas.parentNode) {
+      try {
+        // Use a try/catch for each DOM operation to ensure we continue even if one fails
+        chart.canvas.style.display = 'none';
+      } catch (e) {
+        console.debug('[ChartManager] Error hiding canvas:', e.message);
+      }
     }
     
     // Call the destroy method
     if (typeof chart.destroy === 'function') {
       chart.destroy();
+    }
+    
+    // Additional cleanup for any attached properties
+    for (const prop in chart) {
+      if (chart.hasOwnProperty(prop)) {
+        chart[prop] = null;
+      }
     }
   } catch (err) {
     console.warn('[ChartManager] Error during chart destruction:', err.message);

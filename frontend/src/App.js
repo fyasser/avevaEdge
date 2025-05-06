@@ -284,13 +284,19 @@ function App() {
 
   // Function to update all chart types with new data
   const updateAllChartData = (data) => {
+    console.log("updateAllChartData called with data:", {
+      dataLength: data?.length,
+      firstItem: data?.[0],
+      lastItem: data?.length > 0 ? data[data.length - 1] : null
+    });
+
     // Ensure data is not empty
     if (!data || data.length === 0) {
       console.log('No data to update charts');
       setEmptyChartData();
       return;
     }
-
+  
     // Map the counter property to systemFluidState for each data point
     const processedData = data.map(item => {
       return {
@@ -299,17 +305,27 @@ function App() {
         systemFluidState: item.counter !== undefined ? item.counter : (item.systemFluidState || 0)
       };
     });
-
+  
     // Sort data by timestamp in ascending order for proper chart display
     const sortedData = [...processedData].sort((a, b) => new Date(a.Time_Stamp) - new Date(b.Time_Stamp));
-
+  
+    // Sample data points if there are too many (prevent chart from growing indefinitely)
+    const maxPoints = 150; // Maximum number of data points to display
+    let displayData = sortedData;
+    
+    if (sortedData.length > maxPoints) {
+      const sampleRate = Math.ceil(sortedData.length / maxPoints);
+      displayData = sortedData.filter((_, index) => index % sampleRate === 0);
+      console.log(`Sampling data from ${sortedData.length} to ${displayData.length} points`);
+    }
+  
     // Update Bar Chart data
     const formattedChartData = {
-      labels: sortedData.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
+      labels: displayData.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
       datasets: [
         {
           label: 'Flow',
-          data: sortedData.map((item) => item.rTotalQ),
+          data: displayData.map((item) => item.rTotalQ),
           backgroundColor: 'rgba(75, 192, 192, 0.6)',
         },
       ],
@@ -322,9 +338,9 @@ function App() {
       datasets: [
         {
           data: [
-            sortedData.reduce((sum, item) => sum + item.systemFluidState, 0),
-            sortedData.reduce((sum, item) => sum + item.rTotalQ, 0),
-            sortedData.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
+            displayData.reduce((sum, item) => sum + item.systemFluidState, 0),
+            displayData.reduce((sum, item) => sum + item.rTotalQ, 0),
+            displayData.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
           ],
           backgroundColor: [
             'rgba(54, 162, 235, 0.6)', // Blue for System Efficiency
@@ -338,18 +354,18 @@ function App() {
     
     // Update Line Chart data with renamed labels and removing System Efficiency
     const formattedLineChartData = {
-      labels: sortedData.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
+      labels: displayData.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
       datasets: [
         {
           label: 'Flow',
-          data: sortedData.map((item) => item.rTotalQ),
+          data: displayData.map((item) => item.rTotalQ),
           borderColor: 'rgba(75, 192, 192, 1)',
           backgroundColor: 'rgba(75, 192, 192, 0.2)',
           fill: true,
         },
         {
           label: 'Pressure',
-          data: sortedData.map((item) => item.rTotalQPercentage),
+          data: displayData.map((item) => item.rTotalQPercentage),
           borderColor: 'rgba(255, 99, 132, 1)',
           backgroundColor: 'rgba(255, 99, 132, 0.2)',
           fill: true,
@@ -363,14 +379,14 @@ function App() {
       datasets: [
         {
           label: 'Flow vs Pressure (size: System Fluid State)',
-          data: sortedData.map((item) => ({
+          data: displayData.map((item) => ({
             x: item.rTotalQ,
             y: item.rTotalQPercentage,
             r: Math.max(3, Math.min(10, item.systemFluidState / 10)), // Size based on System Fluid State (scaled)
             efficiency: item.systemFluidState,
             timestamp: format(new Date(item.Time_Stamp), 'MMM dd HH:mm:ss')
           })),
-          backgroundColor: sortedData.map(item => {
+          backgroundColor: displayData.map(item => {
             // Color points based on efficiency (more efficient = more blue)
             const efficiency = item.systemFluidState;
             if (efficiency > 75) {
@@ -383,26 +399,26 @@ function App() {
               return 'rgba(255, 87, 51, 0.7)'; // Very low efficiency - red
             }
           }),
-          pointRadius: sortedData.map(item => Math.max(3, Math.min(10, item.systemFluidState / 10))),
-          pointHoverRadius: sortedData.map(item => Math.max(5, Math.min(15, item.systemFluidState / 8))),
+          pointRadius: displayData.map(item => Math.max(3, Math.min(10, item.systemFluidState / 10))),
+          pointHoverRadius: displayData.map(item => Math.max(5, Math.min(15, item.systemFluidState / 8))),
         },
       ],
     };
     setScatterChartData(formattedScatterChartData);
     
     // Calculate and update metrics
-    const avgFlow = sortedData.length > 0 ?
-      sortedData.reduce((sum, item) => sum + (item.rTotalQ || 0), 0) / sortedData.length : 0;
-    const avgPressure = sortedData.length > 0 ?
-      sortedData.reduce((sum, item) => sum + (item.rTotalQPercentage || 0), 0) / sortedData.length : 0;
-    const avgSystemFluidState = sortedData.length > 0 ? 
-      sortedData.reduce((sum, item) => sum + (item.systemFluidState || 0), 0) / sortedData.length : 0;
+    const avgFlow = displayData.length > 0 ?
+      displayData.reduce((sum, item) => sum + (item.rTotalQ || 0), 0) / displayData.length : 0;
+    const avgPressure = displayData.length > 0 ?
+      displayData.reduce((sum, item) => sum + (item.rTotalQPercentage || 0), 0) / displayData.length : 0;
+    const avgSystemFluidState = displayData.length > 0 ? 
+      displayData.reduce((sum, item) => sum + (item.systemFluidState || 0), 0) / displayData.length : 0;
     
     setMetrics({
       totalFlow: avgFlow.toFixed(2),
       totalPressure: avgPressure.toFixed(2),
       systemEfficiency: isNaN(avgSystemFluidState) ? '0.00%' : avgSystemFluidState.toFixed(2),
-      activeSensors: sortedData.reduce((max, item) => Math.max(max, item.systemFluidState || 0), 0) // Use max systemFluidState as sensor count
+      activeSensors: displayData.reduce((max, item) => Math.max(max, item.systemFluidState || 0), 0) // Use max systemFluidState as sensor count
     });
   };
 
@@ -1628,16 +1644,9 @@ function App() {
               
               <div className="charts-row">
                 <div className="chart-box">
-                  <h3 className="chart-title">
+                  <h3>
                     Pressure Over Time
-                    <div className="chart-controls">
-                      {/* <button className="chart-control-btn" title="Download as PNG">
-                        <span className="material-icons">file_download</span>
-                      </button>
-                      <button className="chart-control-btn" title="View full screen">
-                        <span className="material-icons">fullscreen</span>
-                      </button> */}
-                    </div>
+                    <div className="chart-controls"></div>
                   </h3>
                   <ReportChart 
                     data={tableData}
@@ -1648,20 +1657,25 @@ function App() {
                     style={{ width: '100%', height: '100%' }}
                     dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
                     aggregation={dataFilters.aggregation || 'none'}
-                    showTitle={false} /* Hide duplicate title to prevent "Pressure" from showing twice */
+                    key={`pressure-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}`} 
+                    options={{
+                      plugins: {
+                        legend: {
+                          display: true,
+                        },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: false,
+                        }
+                      }
+                    }}
                   />
                 </div>
                 <div className="chart-box">
-                  <h3 className="chart-title">
+                  <h3>
                     Flow Over Time
-                    <div className="chart-controls">
-                      {/* <button className="chart-control-btn" title="Download as PNG">
-                        <span className="material-icons">file_download</span>
-                      </button>
-                      <button className="chart-control-btn" title="View full screen">
-                        <span className="material-icons">fullscreen</span>
-                      </button> */}
-                    </div>
+                    <div className="chart-controls"></div>
                   </h3>
                   <ReportChart 
                     data={tableData}
@@ -1672,7 +1686,19 @@ function App() {
                     style={{ width: '100%', height: '100%' }}
                     dateRange={dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null}
                     aggregation={dataFilters.aggregation || 'none'}
-                    showTitle={false} /* Hide duplicate title to prevent "Flow" from showing twice */
+                    key={`flow-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}`}
+                    options={{
+                      plugins: {
+                        legend: {
+                          display: true,
+                        },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: false,
+                        }
+                      }
+                    }}
                   />
                 </div>
               </div>

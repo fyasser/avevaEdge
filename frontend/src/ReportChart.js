@@ -13,6 +13,12 @@ import ChartTimeFilter from './ChartTimeFilter';
 // Install global error prevention once when this module is imported
 installGlobalErrorPrevention();
 
+const chartContainerStyle = {
+  width: '100%',
+  height: '100%',
+  position: 'relative'
+};
+
 const ReportChart = ({ 
   data, 
   type = 'bar', 
@@ -22,8 +28,7 @@ const ReportChart = ({
   style = {},
   options = {},
   dateRange = null, // Prop for date range filter (applied via useEffect)
-  aggregation = 'none', // Prop for aggregation filter (applied via useEffect)
-  showTitle = true // Add new prop to control title visibility
+  aggregation = 'none' // Prop for aggregation filter (applied via useEffect)
 }) => {
   const chartRef = useRef(null);
   const chartId = useRef(null);
@@ -64,27 +69,60 @@ const ReportChart = ({
     }
   };
 
-  // Apply global filters from parent component
+  // Fix the useEffect for global filters to correctly handle data
   useEffect(() => {
+    console.log(`ReportChart data filtering for ${yField}:`, { 
+      originalDataLength: data?.length,
+      dateRange,
+      aggregation,
+      xField,
+      yField
+    });
+    
+    // Check if data is actually available
+    if (!data || data.length === 0) {
+      console.log(`No initial data for chart ${yField}`);
+      setFilteredData([]);
+      return;
+    }
+    
+    // Log a sample from original data
+    console.log(`Sample data point:`, data[0]);
+    
     // Apply date range filter
-    let updatedData = data;
-    if (dateRange && dateRange.length === 2) { // Ensure dateRange is valid
+    let updatedData = [...data]; // Create a copy to avoid reference issues
+    
+    // Only apply date range filter if valid date range is provided
+    if (dateRange && Array.isArray(dateRange) && dateRange.length === 2) { 
       const [startDate, endDate] = dateRange;
-      // Add validation for start and end dates if necessary
+      console.log(`Filtering with dateRange: ${startDate} to ${endDate}`);
+      
+      // Add validation for start and end dates
       if (startDate && endDate) {
         updatedData = updatedData.filter(item => {
+          if (!item || !item[xField]) return false;
+          
           const itemDate = new Date(item[xField]);
-          return itemDate >= new Date(startDate) && itemDate <= new Date(endDate);
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          return itemDate >= start && itemDate <= end;
         });
+        console.log(`After date range filter: ${updatedData.length} items`);
       }
+    } else {
+      console.log(`No valid date range provided, using all data`);
     }
-
-    // Apply aggregation filter
+  
+    // Apply aggregation filter if specified
     if (aggregation && aggregation !== 'none') {
       const aggregatedData = {};
       updatedData.forEach(item => {
+        if (!item || !item[xField] || !item[yField]) return; // Skip invalid data points
+        
         const itemDate = new Date(item[xField]);
         let key;
+        
+        // Get the appropriate key based on aggregation level
         if (aggregation === 'minutes') {
           key = itemDate.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm
         } else if (aggregation === 'hours') {
@@ -92,24 +130,42 @@ const ReportChart = ({
         } else if (aggregation === 'days') {
           key = itemDate.toISOString().slice(0, 10); // YYYY-MM-DD
         }
-
+  
         if (!aggregatedData[key]) {
-          aggregatedData[key] = { ...item, count: 1 };
+          aggregatedData[key] = { 
+            ...item, 
+            count: 1,
+            // Ensure we have a valid value for aggregating
+            [yField]: typeof item[yField] === 'number' ? item[yField] : 0 
+          };
         } else {
-          aggregatedData[key][yField] += item[yField];
+          // Safely accumulate values, handling potential null/undefined
+          const yValue = typeof item[yField] === 'number' ? item[yField] : 0;
+          aggregatedData[key][yField] += yValue;
           aggregatedData[key].count += 1;
         }
       });
-
+  
+      // Convert back to array and calculate averages
       updatedData = Object.values(aggregatedData).map(item => ({
         ...item,
         [yField]: item[yField] / item.count // Average the values
       }));
+      
+      console.log(`After aggregation (${aggregation}): ${updatedData.length} items`);
     }
-
+  
+    // Log resulting data before setting state
+    if (updatedData.length > 0) {
+      console.log(`First filtered item:`, updatedData[0]);
+      console.log(`Last filtered item:`, updatedData[updatedData.length-1]);
+    }
+    
     setFilteredData(updatedData);
+    // Also set chartFilteredData directly to bypass chart-specific filtering
+    setChartFilteredData(updatedData);
   }, [data, dateRange, aggregation, xField, yField]);
-
+  
   // Apply chart-specific filters
   useEffect(() => {
     let data = filteredData;
@@ -125,133 +181,28 @@ const ReportChart = ({
     
     // Apply chart-specific time filter if set
     if (chartTimeFilter) {
-      // Check if we need to aggregate data points by time granularity
-      if (chartTimeFilter.aggregatePoints && chartTimeFilter.granularity) {
-        // Create groups based on the selected time granularity
-        const aggregatedData = {};
+      data = data.filter(item => {
+        const itemDate = new Date(item[xField]);
         
-        data.forEach(item => {
-          const itemDate = new Date(item[xField]);
-          let key;
-          
-          // Generate different keys based on granularity
-          if (chartTimeFilter.granularity === 'hour') {
-            // Group by hour (YYYY-MM-DD-HH format)
-            key = format(itemDate, 'yyyy-MM-dd-HH');
-            
-            // If specific hour is selected, only include matching hours
-            if (chartTimeFilter.type === 'hour' && chartTimeFilter.hour !== undefined) {
-              if (itemDate.getHours() !== chartTimeFilter.hour) {
-                return; // Skip this item if the hour doesn't match
-              }
-            }
-          } 
-          else if (chartTimeFilter.granularity === 'minute') {
-            // Group by minute (YYYY-MM-DD-HH-mm format)
-            key = format(itemDate, 'yyyy-MM-dd-HH-mm');
-            
-            // If specific minute is selected, only include matching minutes
-            if (chartTimeFilter.type === 'minute' && 
-                chartTimeFilter.hour !== undefined && 
-                chartTimeFilter.minute !== undefined) {
-              if (itemDate.getHours() !== chartTimeFilter.hour || 
-                  itemDate.getMinutes() !== chartTimeFilter.minute) {
-                return; // Skip this item if the hour/minute doesn't match
-              }
-            }
-          } 
-          else if (chartTimeFilter.granularity === 'second') {
-            // Group by second (YYYY-MM-DD-HH-mm-ss format)
-            key = format(itemDate, 'yyyy-MM-dd-HH-mm-ss');
-            
-            // If specific second is selected, only include matching seconds
-            if (chartTimeFilter.type === 'second' && 
-                chartTimeFilter.hour !== undefined && 
-                chartTimeFilter.minute !== undefined && 
-                chartTimeFilter.second !== undefined) {
-              if (itemDate.getHours() !== chartTimeFilter.hour || 
-                  itemDate.getMinutes() !== chartTimeFilter.minute || 
-                  itemDate.getSeconds() !== chartTimeFilter.second) {
-                return; // Skip this item if the hour/minute/second doesn't match
-              }
-            }
-          }
-          
-          // Aggregate data points
-          if (!aggregatedData[key]) {
-            aggregatedData[key] = {
-              ...item,
-              count: 1,
-              originalTimestamp: new Date(item[xField])
-            };
-          } else {
-            // Sum up the values for this time slot
-            aggregatedData[key][yField] += parseFloat(item[yField] || 0);
-            
-            // If there are other numeric fields that need to be averaged, add them here
-            if (item.rTotalQ !== undefined && yField !== 'rTotalQ') {
-              aggregatedData[key].rTotalQ = (aggregatedData[key].rTotalQ || 0) + item.rTotalQ;
-            }
-            if (item.rTotalQPercentage !== undefined && yField !== 'rTotalQPercentage') {
-              aggregatedData[key].rTotalQPercentage = (aggregatedData[key].rTotalQPercentage || 0) + item.rTotalQPercentage;
-            }
-            if (item.systemFluidState !== undefined) {
-              aggregatedData[key].systemFluidState = (aggregatedData[key].systemFluidState || 0) + item.systemFluidState;
-            }
-            
-            aggregatedData[key].count++;
-          }
-        });
+        if (chartTimeFilter.type === 'hour') {
+          return itemDate.getHours() === chartTimeFilter.hour;
+        } 
+        else if (chartTimeFilter.type === 'minute') {
+          return itemDate.getHours() === chartTimeFilter.hour && 
+                 itemDate.getMinutes() === chartTimeFilter.minute;
+        }
+        else if (chartTimeFilter.type === 'second') {
+          return itemDate.getHours() === chartTimeFilter.hour && 
+                 itemDate.getMinutes() === chartTimeFilter.minute && 
+                 itemDate.getSeconds() === chartTimeFilter.second;
+        }
         
-        // Calculate averages for each group
-        data = Object.values(aggregatedData).map(item => {
-          const result = { ...item };
-          
-          // Average the values
-          result[yField] = item[yField] / item.count;
-          
-          // Average other numeric fields if present
-          if (item.rTotalQ !== undefined && yField !== 'rTotalQ') {
-            result.rTotalQ = item.rTotalQ / item.count;
-          }
-          if (item.rTotalQPercentage !== undefined && yField !== 'rTotalQPercentage') {
-            result.rTotalQPercentage = item.rTotalQPercentage / item.count;
-          }
-          if (item.systemFluidState !== undefined) {
-            result.systemFluidState = item.systemFluidState / item.count;
-          }
-          
-          // Keep the original timestamp for proper display
-          result[xField] = item.originalTimestamp;
-          
-          return result;
-        });
-      } 
-      // If not aggregating, apply regular time-based filtering
-      else {
-        data = data.filter(item => {
-          const itemDate = new Date(item[xField]);
-          
-          if (chartTimeFilter.type === 'hour') {
-            return itemDate.getHours() === chartTimeFilter.hour;
-          } 
-          else if (chartTimeFilter.type === 'minute') {
-            return itemDate.getHours() === chartTimeFilter.hour && 
-                   itemDate.getMinutes() === chartTimeFilter.minute;
-          }
-          else if (chartTimeFilter.type === 'second') {
-            return itemDate.getHours() === chartTimeFilter.hour && 
-                   itemDate.getMinutes() === chartTimeFilter.minute && 
-                   itemDate.getSeconds() === chartTimeFilter.second;
-          }
-          
-          return true;
-        });
-      }
+        return true;
+      });
     }
     
     setChartFilteredData(data);
-  }, [filteredData, chartDateFilter, chartTimeFilter, xField, yField]);
+  }, [filteredData, chartDateFilter, chartTimeFilter, xField]);
 
   // Handle chart-specific date filter changes
   const handleDateFilterChange = (dateFilter) => {
@@ -263,10 +214,19 @@ const ReportChart = ({
     setChartTimeFilter(timeFilter);
   };
 
-  // Prepare chart data based on input data
+  // Add debugging console logs to the prepareChartData function
   const prepareChartData = () => {
+    console.log(`ReportChart prepareChartData for ${yField}:`, { 
+      componentId,
+      dataLength: chartFilteredData?.length,
+      sampleDataPoint: chartFilteredData?.[0],
+      dateRange,
+      aggregation
+    });
+    
     // Handle empty data
     if (!chartFilteredData || chartFilteredData.length === 0) {
+      console.log(`No data available for chart ${yField}`);
       return {
         labels: ['No Data'],
         datasets: [{ 
@@ -280,6 +240,13 @@ const ReportChart = ({
     
     // Sort data by timestamp in ascending order to ensure correct chronological display
     const sortedData = [...chartFilteredData].sort((a, b) => new Date(a[xField]) - new Date(b[xField]));
+    console.log(`Sorted data for ${yField}:`, { 
+      length: sortedData.length, 
+      firstItem: sortedData[0],
+      lastItem: sortedData[sortedData.length-1],
+      yField,
+      yValues: sortedData.slice(0, 3).map(item => item[yField])
+    });
     
     let chartData;
     
@@ -318,12 +285,7 @@ const ReportChart = ({
       }
       
       chartData = {
-        labels: displayData.map(item => {
-          // Use more compact date format for dense time series
-          const date = new Date(item[xField]);
-          // Only include MM-DD HH:MM format to save space
-          return format(date, 'MM-dd HH:mm');
-        }),
+        labels: displayData.map(item => format(new Date(item[xField]), 'MMM dd HH:mm')),
         datasets: [{
           label: title || `${yField} Over Time`,
           data: displayData.map(item => item[yField]),
@@ -331,7 +293,7 @@ const ReportChart = ({
           backgroundColor: colors.background,
           fill: true,
           tension: 0.2, // Reduced tension for more accurate representation
-          pointRadius: displayData.length > 50 ? 0 : 2, // Hide points for dense data
+          pointRadius: displayData.length > 100 ? 1 : 2, // Smaller points for dense data
           pointHoverRadius: 7,
           borderWidth: 2,
           pointBackgroundColor: colors.primary,
@@ -485,20 +447,17 @@ const ReportChart = ({
           drawBorder: false
         },
         ticks: {
-          maxTicksLimit: 6, // Reduced for less crowding
-          maxRotation: 30, // Reduced rotation angle 
+          maxTicksLimit: 10, // Increased for better distribution
+          maxRotation: 45,
           minRotation: 0,
-          padding: 3, // Reduced padding
+          padding: 4, // Reduced padding
           font: {
-            size: 10 // Smaller font size
+            size: 11
           },
-          autoSkip: true,
-          major: {
-            enabled: true // Enable major ticks for better readability
-          }
+          autoSkip: true // Ensure ticks are properly skipped when needed
         },
-        offset: false,
-        distribution: 'linear'
+        offset: false, // Remove extra space on axis
+        distribution: 'linear' // Ensure even distribution of points
       },
       y: {
         position: 'left',
@@ -508,19 +467,18 @@ const ReportChart = ({
           drawBorder: false
         },
         ticks: {
-          padding: 2,
+          padding: 2, // Reduced padding
           font: {
-            size: 10 // Smaller font
+            size: 11
           },
           callback: function(value) {
             if (value >= 1000) {
               return (value / 1000).toFixed(1) + 'k';
             }
             return value;
-          },
-          maxTicksLimit: 8 // Limit number of ticks on y-axis
+          }
         },
-        beginAtZero: true // Start from zero for better comparison
+        beginAtZero: false
       }
     } : undefined, // No scales for doughnut charts
     interaction: {
@@ -536,37 +494,91 @@ const ReportChart = ({
   const chartOptions = { ...defaultOptions, ...options };
   const chartData = prepareChartData();
   
-  // Render proper chart type
+  // Update the chart rendering to simplify and focus on direct rendering
   const renderChart = () => {
+    // Create a unique ID for this chart render cycle
+    const chartContainerId = `chart-container-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Force chart to use available data by checking if we have data and creating a valid structure
+    let actualData = chartData;
+    
+    // Special case: if y values exist but are 0, we might be displaying "No Data Available" incorrectly
+    if (chartFilteredData && chartFilteredData.length > 0 && 
+        (!actualData.datasets || actualData.datasets[0].label === 'No Data Available')) {
+      console.log(`Forcing data rendering for ${yField} with ${chartFilteredData.length} points`);
+      
+      const colors = {
+        primary: yField === "rTotalQPercentage" ? 'rgba(255, 99, 132, 1)' : 'rgba(75, 192, 192, 1)',
+        background: yField === "rTotalQPercentage" ? 'rgba(255, 99, 132, 0.2)' : 'rgba(75, 192, 192, 0.2)',
+      };
+      
+      const sortedData = [...chartFilteredData].sort((a, b) => new Date(a[xField]) - new Date(b[xField]));
+      
+      actualData = {
+        labels: sortedData.map(item => format(new Date(item[xField]), 'MMM dd HH:mm')),
+        datasets: [{
+          label: title || `${yField} Over Time`,
+          data: sortedData.map(item => item[yField]),
+          borderColor: colors.primary,
+          backgroundColor: colors.background,
+          fill: true,
+          tension: 0.2,
+          pointRadius: 3,
+          borderWidth: 2
+        }]
+      };
+    }
+    
+    // Standard chart rendering based on type with the updated data
     switch (type) {
       case 'line':
-        return <Line data={chartData} options={chartOptions} ref={handleChartRef} />;
+        return (
+          <div style={chartContainerStyle} id={chartContainerId} key={chartContainerId}>
+            <Line data={actualData} options={chartOptions} ref={handleChartRef} />
+          </div>
+        );
       case 'bar':
-        return <Bar data={chartData} options={chartOptions} ref={handleChartRef} />;
+        return (
+          <div style={chartContainerStyle} id={chartContainerId} key={chartContainerId}>
+            <Bar data={actualData} options={chartOptions} ref={handleChartRef} />
+          </div>
+        );
       case 'doughnut':
-        return <Doughnut data={chartData} options={chartOptions} ref={handleChartRef} />;
+        return (
+          <div style={chartContainerStyle} id={chartContainerId} key={chartContainerId}>
+            <Doughnut data={actualData} options={chartOptions} ref={handleChartRef} />
+          </div>
+        );
       case 'scatter':
-        return <Scatter data={chartData} options={chartOptions} ref={handleChartRef} />;
+        return (
+          <div style={chartContainerStyle} id={chartContainerId} key={chartContainerId}>
+            <Scatter data={actualData} options={chartOptions} ref={handleChartRef} />
+          </div>
+        );
       default:
-        return <Bar data={chartData} options={chartOptions} ref={handleChartRef} />;
+        return (
+          <div style={chartContainerStyle} id={chartContainerId} key={chartContainerId}>
+            <Bar data={actualData} options={chartOptions} ref={handleChartRef} />
+          </div>
+        );
     }
   };
 
   return (
-    <div className="chart-wrapper" style={{
-      height: '450px',
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      width: '100%', 
+      height: '400px', // Increased height for better visualization
+      maxHeight: '500px', // Increased max height
+      overflow: 'hidden',
+      position: 'relative',
       ...style
     }}>
-      {/* Only display title bar if showTitle prop is true (default) */}
-      {showTitle !== false && (
-        <div className="chart-title-bar" style={{ padding: '8px 15px' }}>
-          {title || (yField === "rTotalQ" ? "Flow Over Time" : yField === "rTotalQPercentage" ? "Pressure Over Time" : "Chart")}
-        </div>
-      )}
-      
-      {/* More compact filters row with better spacing */}
-      <div className="chart-filters-row" style={{ padding: '5px 12px', borderBottom: '1px solid #eee' }}>
-        <div className="chart-filters-container">
+      {/* Hide the chart-specific filters that may be restricting data */}
+      {/*
+      <div className="chart-header-with-filters">
+        <div className="chart-filters"></div>
           <ChartDateFilter 
             data={filteredData} 
             dateField={xField} 
@@ -581,12 +593,10 @@ const ReportChart = ({
           />
         </div>
       </div>
+      */}
       
-      {/* Maximized chart content area with improved height */}
-      <div className="chart-content" style={{ padding: '0 5px 5px', flex: '1' }}>
-        <div style={{ flex: 1, width: '100%', height: '100%' }}>
-          {renderChart()}
-        </div>
+      <div className="chart-container" style={{ width: '100%', height: '100%' }}>
+        {renderChart()}
       </div>
     </div>
   );
