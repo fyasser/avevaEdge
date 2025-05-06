@@ -560,10 +560,16 @@ function App() {
 
   // Function to handle chart-specific date filter changes
   const handleChartDateFilterChange = (chartType, dateFilter) => {
-    setChartDateFilters(prev => ({
-      ...prev,
-      [chartType]: dateFilter
-    }));
+    console.log(`Chart date filter change for ${chartType}:`, dateFilter);
+    
+    setChartDateFilters(prev => {
+      const updated = {
+        ...prev,
+        [chartType]: dateFilter
+      };
+      console.log(`Updated chartDateFilters:`, updated);
+      return updated;
+    });
     
     // Force chart rerenders when date filter changes
     setChartRenderKey(Date.now());
@@ -1561,10 +1567,6 @@ function App() {
               {!isSidebarCollapsed && <span className="nav-text">Dashboard</span>}
             </li>
             <li>
-              <span className="material-icons">assessment</span>
-              {!isSidebarCollapsed && <span className="nav-text">Assessment</span>}
-            </li>
-            <li>
               <span className="material-icons">settings</span>
               {!isSidebarCollapsed && <span className="nav-text">Settings</span>}
             </li>
@@ -1762,28 +1764,14 @@ function App() {
               </div>
 
               <div className="carousel-section">
-                <div className="carousel-layout">
-                  <div className="carousel-content">
-                    <ChartCarousel
-                      lineChartData={lineChartData}
-                      chartData={chartData}
-                      doughnutChartData={doughnutChartData}
-                      scatterChartData={scatterChartData}
-                      aggregation={dataFilters.aggregation || 'none'} 
-                    />
-                  </div>
-                  <div className="carousel-sidebar">
-                    <FilterOptions
-                      selectedCharts={selectedCharts}
-                      handleChartSelection={handleChartSelection}
-                      dateRange={dateRange}
-                      handleDateRangeChange={handleDateRangeChange}
-                      dataFilters={dataFilters}
-                      handleAdditionalFilterChange={handleAdditionalFilterChange}
-                      fetchFilteredData={fetchFilteredData}
-                      downloadPage={downloadPage}
-                    />
-                  </div>
+                <div className="carousel-content" style={{ width: '100%' }}>
+                  <ChartCarousel
+                    lineChartData={lineChartData}
+                    chartData={chartData}
+                    doughnutChartData={doughnutChartData}
+                    scatterChartData={scatterChartData}
+                    aggregation={dataFilters.aggregation || 'none'} 
+                  />
                 </div>
               </div>
             </>

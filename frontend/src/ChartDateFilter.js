@@ -13,6 +13,13 @@ const ChartDateFilter = ({
   
   // Extract unique dates from data when component mounts or data changes
   useEffect(() => {
+    console.log('ChartDateFilter: Data changed', { 
+      dataLength: data?.length,
+      firstItem: data?.[0],
+      dateField,
+      title
+    });
+    
     if (Array.isArray(data) && data.length > 0) {
       // Extract unique dates from the dataset
       const uniqueDates = new Set();
@@ -29,6 +36,8 @@ const ChartDateFilter = ({
           uniqueDates.add(dateKey);
         }
       });
+      
+      console.log(`ChartDateFilter: Found ${uniqueDates.size} unique dates for ${title}`);
       
       // Create options array starting with "All Dates" option
       const options = [
@@ -69,8 +78,11 @@ const ChartDateFilter = ({
   
   // Handle filter change
   const handleFilterChange = (value) => {
+    console.log(`ChartDateFilter (${title}): Filter value changed to:`, value);
+    
     // If "all" selected, pass null to parent to indicate no filtering
     if (value === 'all') {
+      console.log(`ChartDateFilter (${title}): Setting filter to null (All Dates)`);
       onDateFilterChange(null);
       return;
     }
@@ -81,10 +93,13 @@ const ChartDateFilter = ({
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 7);
       
-      onDateFilterChange({
+      const dateFilter = {
         start: startDate.toISOString(),
         end: endDate.toISOString()
-      });
+      };
+      
+      console.log(`ChartDateFilter (${title}): Setting last 7 days filter:`, dateFilter);
+      onDateFilterChange(dateFilter);
       return;
     }
     
@@ -93,10 +108,13 @@ const ChartDateFilter = ({
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 30);
       
-      onDateFilterChange({
+      const dateFilter = {
         start: startDate.toISOString(),
         end: endDate.toISOString()
-      });
+      };
+      
+      console.log(`ChartDateFilter (${title}): Setting last 30 days filter:`, dateFilter);
+      onDateFilterChange(dateFilter);
       return;
     }
     
@@ -105,10 +123,18 @@ const ChartDateFilter = ({
     const nextDay = new Date(selectedDate);
     nextDay.setDate(nextDay.getDate() + 1);
     
-    onDateFilterChange({
+    const dateFilter = {
       start: selectedDate.toISOString(),
       end: nextDay.toISOString()
+    };
+    
+    console.log(`ChartDateFilter (${title}): Setting specific date filter:`, {
+      selectedDate: selectedDate.toLocaleDateString(),
+      nextDay: nextDay.toLocaleDateString(),
+      filter: dateFilter
     });
+    
+    onDateFilterChange(dateFilter);
   };
 
   return (

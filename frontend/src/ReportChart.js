@@ -76,7 +76,8 @@ const ReportChart = ({
       dateRange,
       aggregation,
       xField,
-      yField
+      yField,
+      chartId: componentId
     });
     
     // Check if data is actually available
@@ -92,25 +93,52 @@ const ReportChart = ({
     // Apply date range filter
     let updatedData = [...data]; // Create a copy to avoid reference issues
     
+    // Handle both array and object dateRange formats
+    let startDate = null;
+    let endDate = null;
+    
+    if (dateRange) {
+      if (Array.isArray(dateRange) && dateRange.length === 2) {
+        [startDate, endDate] = dateRange;
+      } else if (dateRange.start && dateRange.end) {
+        // Handle object format with start/end properties
+        startDate = dateRange.start;
+        endDate = dateRange.end;
+      }
+    }
+    
     // Only apply date range filter if valid date range is provided
-    if (dateRange && Array.isArray(dateRange) && dateRange.length === 2) { 
-      const [startDate, endDate] = dateRange;
+    if (startDate && endDate) { 
       console.log(`Filtering with dateRange: ${startDate} to ${endDate}`);
+      console.log(`Before date filtering: ${updatedData.length} items`);
       
-      // Add validation for start and end dates
-      if (startDate && endDate) {
-        updatedData = updatedData.filter(item => {
-          if (!item || !item[xField]) return false;
-          
-          const itemDate = new Date(item[xField]);
-          const start = new Date(startDate);
-          const end = new Date(endDate);
-          return itemDate >= start && itemDate <= end;
-        });
-        console.log(`After date range filter: ${updatedData.length} items`);
+      updatedData = updatedData.filter(item => {
+        if (!item || !item[xField]) return false;
+        
+        const itemDate = new Date(item[xField]);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        const isInRange = itemDate >= start && itemDate <= end;
+        
+        // Log some samples for debugging
+        if (Math.random() < 0.01) { // Only log ~1% of items to avoid console flood
+          console.log(`Date check: ${itemDate.toISOString()} in range ${start.toISOString()} - ${end.toISOString()} = ${isInRange}`);
+        }
+        
+        return isInRange;
+      });
+      console.log(`After date range filter: ${updatedData.length} items`);
+      
+      // If we filtered out all data, this is a problem
+      if (updatedData.length === 0) {
+        console.warn(`Date filter removed ALL data points. Check date formats and ranges.`);
+        console.warn(`Start date: ${new Date(startDate).toISOString()}`);
+        console.warn(`End date: ${new Date(endDate).toISOString()}`);
+        console.warn(`Sample data point date: ${data[0] ? new Date(data[0][xField]).toISOString() : 'N/A'}`);
       }
     } else {
-      console.log(`No valid date range provided, using all data`);
+      console.log(`No valid date range provided for ${yField}, using all data`);
     }
   
     // Apply aggregation filter if specified
@@ -164,7 +192,7 @@ const ReportChart = ({
     setFilteredData(updatedData);
     // Also set chartFilteredData directly to bypass chart-specific filtering
     setChartFilteredData(updatedData);
-  }, [data, dateRange, aggregation, xField, yField]);
+  }, [data, dateRange, aggregation, xField, yField, componentId]);
   
   // Apply chart-specific filters
   useEffect(() => {

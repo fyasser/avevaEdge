@@ -22,6 +22,7 @@ import {
 } from './utils/chartInstanceManager';
 import ChartDateFilter from './ChartDateFilter';
 import ChartTimeFilter from './ChartTimeFilter';
+import './ChartCarousel.css'; // We'll create this file for custom styling
 
 // Install global error prevention
 installGlobalErrorPrevention();
@@ -40,7 +41,7 @@ ChartJS.register(
   Filler
 );
 
-const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterChartData }) => {
+const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterChartData, aggregation = 'none' }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [carouselKey, setCarouselKey] = useState(Date.now());
   const chartRefs = useRef({
@@ -60,6 +61,11 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   // State for filter management
   const [chartDateFilter, setChartDateFilter] = useState(null);
   const [chartTimeFilter, setChartTimeFilter] = useState(null);
+  const [activeFilters, setActiveFilters] = useState({
+    date: false,
+    time: false
+  });
+  const [showFilters, setShowFilters] = useState(true);
   const [filteredChartData, setFilteredChartData] = useState({
     line: lineChartData,
     bar: chartData,
@@ -160,8 +166,14 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
 
   // Apply filters to all chart data
   useEffect(() => {
+    // Update active filter states
+    setActiveFilters({
+      date: !!chartDateFilter,
+      time: !!chartTimeFilter && chartTimeFilter.type !== 'none'
+    });
+
     // Skip if no filters applied
-    if (!chartDateFilter && !chartTimeFilter) {
+    if (!chartDateFilter && (!chartTimeFilter || chartTimeFilter.type === 'none')) {
       console.log('ChartCarousel: No filters active, using original data');
       setFilteredChartData({
         line: lineChartData,
@@ -350,6 +362,14 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
     }
   }, [chartDateFilter, chartTimeFilter, lineChartData, chartData, doughnutChartData, scatterChartData]);
 
+  // Function to reset filters
+  const handleResetFilters = () => {
+    setChartDateFilter(null);
+    setChartTimeFilter(null);
+    // Force chart regeneration
+    cleanupCharts();
+  };
+
   // Handle date filter changes
   const handleDateFilterChange = (dateFilter) => {
     console.log('ChartCarousel: Date filter changed:', dateFilter);
@@ -423,7 +443,7 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
           size: 16,
           weight: 'bold',
         },
-        padding: 10,
+        padding: 6, // Reduced padding to move chart up
       },
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -454,11 +474,24 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
       legend: {
         display: true,
         position: 'top',
+        labels: {
+          padding: 15, // Reduced padding to move chart up
+          boxWidth: 12,
+          usePointStyle: true
+        },
+        margin: 8 // Reduced margin to move chart up
       },
       // Add a vertical line that follows cursor (for line and bar charts)
       hover: {
         mode: 'index',
         intersect: false
+      },
+      crosshair: {
+        line: {
+          color: 'rgba(0, 0, 0, 0.3)',
+          width: 1,
+          dashPattern: [5, 5]
+        }
       }
     },
     // Scale options for line, bar, and scatter charts
@@ -467,6 +500,17 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
         grid: {
           display: true,
           color: 'rgba(0, 0, 0, 0.05)'
+        },
+        ticks: {
+          maxTicksLimit: 8, // Reduced number of ticks
+          maxRotation: 0, // No rotation to save vertical space
+          padding: 5,
+          font: {
+            size: 10 // Smaller font size
+          }
+        },
+        border: {
+          width: 1
         }
       },
       y: {
@@ -474,9 +518,34 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
           display: true,
           color: 'rgba(0, 0, 0, 0.05)'
         },
-        beginAtZero: false
+        beginAtZero: false,
+        ticks: {
+          padding: 5,
+          font: {
+            size: 10 // Smaller font size
+          },
+          callback: function(value) {
+            // Shorten large numbers
+            if (value >= 1000) {
+              return (value / 1000).toFixed(1) + 'k';
+            }
+            return value;
+          }
+        },
+        border: {
+          width: 1
+        }
       }
-    } : undefined // No scales for doughnut charts
+    } : undefined, // No scales for doughnut charts
+    // Add more padding to entire chart
+    layout: {
+      padding: {
+        left: 5,
+        right: 10,
+        top: 0, // Reduced top padding
+        bottom: 35 // Increased bottom padding to push content upward
+      }
+    }
   });
 
   // Register a new chart instance with our manager
@@ -534,11 +603,11 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
 
   const chartStyle = {
     width: '100%',
-    height: '600px',
+    height: '450px',  // Reduced height to ensure chart fits
     margin: '0 auto',
     maxWidth: '100%',
     boxSizing: 'border-box',
-    overflow: 'hidden'
+    overflow: 'visible'  // Keep visible overflow to prevent cutting off
   };
 
   const fallbackChart = {
@@ -695,43 +764,159 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   const filterData = getDataForFilters();
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="chart-carousel bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold text-aveva-primary mb-4 text-center">{charts[currentIndex].title}</h2>
       
-      {/* Add filters at the top of the carousel */}
-      <div className="chart-filters-row mb-4 border-b border-gray-200 pb-3">
-        <div className="chart-filters-container flex flex-wrap gap-4">
-          <ChartDateFilter 
-            data={filterData}
-            dateField="Time_Stamp"
-            onDateFilterChange={handleDateFilterChange}
-            title="Date"
-          />
-          <ChartTimeFilter
-            data={filterData}
-            dateField="Time_Stamp"
-            onTimeFilterChange={handleTimeFilterChange}
-            title="Time"
-          />
+      {/* Filter controls header */}
+      <div className="filter-controls-header flex justify-between items-center mb-2">
+        <h3 className="font-medium text-gray-700">
+          Chart Filters
+          {(activeFilters.date || activeFilters.time) && (
+            <span className="ml-2 text-sm text-green-600 font-normal">
+              ({Object.values(activeFilters).filter(Boolean).length} active)
+            </span>
+          )}
+        </h3>
+        <div className="filter-buttons">
+          <button 
+            className="text-sm text-gray-600 hover:text-aveva-primary mr-3"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </button>
+          {(activeFilters.date || activeFilters.time) && (
+            <button 
+              className="text-sm text-red-600 hover:text-red-800"
+              onClick={handleResetFilters}
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
       </div>
       
-      <div className="w-full h-[630px] mb-4">
-        {/* Only render the currently selected chart */}
+      {/* Add enhanced filters section */}
+      {showFilters && (
+        <div className="chart-filters-container mb-4 p-3 border border-gray-200 rounded-md bg-gray-50">
+          <div className="flex flex-wrap gap-6">
+            <div className={`filter-item ${activeFilters.date ? 'filter-active' : ''}`}>
+              <ChartDateFilter 
+                key={`date-filter-${!!chartDateFilter}`}
+                data={filterData}
+                dateField="Time_Stamp"
+                onDateFilterChange={handleDateFilterChange}
+                title="Date Filter"
+              />
+              {activeFilters.date && (
+                <div className="filter-indicator">
+                  <span className="text-xs text-green-600">
+                    {new Date(chartDateFilter.start).toLocaleDateString()} - 
+                    {new Date(chartDateFilter.end).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+            </div>
+            
+            <div className={`filter-item ${activeFilters.time ? 'filter-active' : ''}`}>
+              <ChartTimeFilter
+                key={`time-filter-${!!chartTimeFilter}`}
+                data={filterData}
+                dateField="Time_Stamp"
+                onTimeFilterChange={handleTimeFilterChange}
+                title="Time Filter"
+              />
+              {activeFilters.time && chartTimeFilter && (
+                <div className="filter-indicator">
+                  <span className="text-xs text-green-600">
+                    {chartTimeFilter.type === 'hour' ? `Hour: ${chartTimeFilter.hour}` :
+                     chartTimeFilter.type === 'minute' ? `${chartTimeFilter.hour}:${chartTimeFilter.minute}` :
+                     chartTimeFilter.type === 'second' ? `${chartTimeFilter.hour}:${chartTimeFilter.minute}:${chartTimeFilter.second}` : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Data aggregation info */}
+            {aggregation && aggregation !== 'none' && (
+              <div className="filter-item">
+                <div className="filter-title">Data Aggregation:</div>
+                <div className="text-sm font-medium text-aveva-primary">
+                  {aggregation === 'minutes' ? 'By Minute' : 
+                   aggregation === 'hours' ? 'Hourly' : 
+                   aggregation === 'days' ? 'Daily' : 'None'}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Chart data status indicator */}
+      {(activeFilters.date || activeFilters.time) && (
+        <div className="data-status-indicator mb-2 text-sm flex items-center">
+          <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"></span>
+          <span className="text-gray-700">
+            Showing filtered data
+            {filteredChartData[charts[currentIndex].type]?.datasets[0]?.data?.length && (
+              <span> ({filteredChartData[charts[currentIndex].type]?.datasets[0]?.data?.length} data points)</span>
+            )}
+          </span>
+        </div>
+      )}
+      
+      <div className="chart-container w-full h-[480px] mb-4 relative">
+        {/* Chart render */}
         {charts[currentIndex].render()}
+        
+        {/* No data overlay */}
+        {(filteredChartData[charts[currentIndex].type]?.datasets[0]?.data?.length === 0 ||
+         (filteredChartData[charts[currentIndex].type]?.labels?.length === 0 && 
+          charts[currentIndex].type !== 'scatter')) && (
+          <div className="no-data-overlay absolute inset-0 flex items-center justify-center bg-white bg-opacity-80">
+            <div className="text-center">
+              <div className="text-5xl text-gray-300 mb-2">📊</div>
+              <h3 className="text-xl font-medium text-gray-600">No Data Available</h3>
+              <p className="text-sm text-gray-500 mt-2">Try adjusting or clearing your filters</p>
+              <button 
+                className="mt-4 px-4 py-2 bg-aveva-primary text-white rounded-md hover:bg-aveva-secondary transition-colors duration-200"
+                onClick={handleResetFilters}
+              >
+                Clear All Filters
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-      <div className="flex justify-center gap-4">
+      
+      {/* Chart navigation */}
+      <div className="chart-navigation flex justify-between items-center">
         <button 
           onClick={handlePrevious}
-          className="px-4 py-2 bg-aveva-primary text-white rounded-md hover:bg-aveva-secondary transition-colors duration-200"
+          className="chart-nav-btn flex items-center px-4 py-2 bg-aveva-primary text-white rounded-md hover:bg-aveva-secondary transition-colors duration-200"
         >
-          Previous
+          <span className="mr-2">←</span>
+          Previous Chart
         </button>
+        
+        <div className="chart-indicators flex gap-1">
+          {charts.map((chart, index) => (
+            <button 
+              key={index}
+              className={`w-2 h-2 rounded-full transition-all ${
+                index === currentIndex ? 'bg-aveva-primary scale-125' : 'bg-gray-300'
+              }`}
+              onClick={() => setCurrentIndex(index)}
+              aria-label={`Go to ${chart.title}`}
+            />
+          ))}
+        </div>
+        
         <button 
           onClick={handleNext}
-          className="px-4 py-2 bg-aveva-primary text-white rounded-md hover:bg-aveva-secondary transition-colors duration-200"
+          className="chart-nav-btn flex items-center px-4 py-2 bg-aveva-primary text-white rounded-md hover:bg-aveva-secondary transition-colors duration-200"
         >
-          Next
+          Next Chart
+          <span className="ml-2">→</span>
         </button>
       </div>
     </div>
