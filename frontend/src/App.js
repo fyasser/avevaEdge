@@ -1771,6 +1771,7 @@ function App() {
                     doughnutChartData={doughnutChartData}
                     scatterChartData={scatterChartData}
                     aggregation={dataFilters.aggregation || 'none'} 
+                    selectedCharts={selectedCharts}
                   />
                 </div>
               </div>

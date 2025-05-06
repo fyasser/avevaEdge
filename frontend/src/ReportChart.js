@@ -282,13 +282,13 @@ const ReportChart = ({
     const getThemeColors = () => {
       if (yField === "rTotalQ") { // Flow chart
         return {
-          primary: 'rgba(0, 163, 224, 1)', // AVEVA Accent Blue
-          background: 'rgba(0, 163, 224, 0.2)',
+          primary: 'rgba(0, 79, 139, 1)', // AVEVA Accent Blue
+          background: 'rgba(150, 197, 214, 0.2)',
           hover: 'rgba(0, 163, 224, 0.8)'
         };
       } else if (yField === "rTotalQPercentage") { // Pressure chart
         return {
-          primary: 'rgba(255, 99, 132, 1)', // Red for pressure
+          primary: 'rgb(122, 55, 55)', // Red for pressure
           background: 'rgba(255, 99, 132, 0.2)',
           hover: 'rgba(255, 99, 132, 0.8)'
         };

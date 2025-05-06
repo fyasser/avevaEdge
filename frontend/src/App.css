@@ -725,7 +725,7 @@ canvas[role="img"] {
 .chart-controls {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 5px;
 }
 
 .chart-controls .time-aggregation-container {

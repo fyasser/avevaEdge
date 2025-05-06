@@ -41,7 +41,26 @@ ChartJS.register(
   Filler
 );
 
-const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterChartData, aggregation = 'none' }) => {
+// Define a consistent color palette for all charts
+const chartColorScheme = {
+  primary: 'rgba(0, 79, 139, 1)',       // AVEVA blue
+  primaryLight: 'rgba(0, 79, 139, 0.7)', // AVEVA blue lighter
+  secondary:'rgb(122, 55, 55)',     // Secondary blue
+  secondaryLight: 'rgba(104, 127, 176, 0.7)',
+  accent1: 'rgb(48, 106, 183)',      // Teal
+  accent1Light: 'rgba(133, 207, 207, 0.4)',
+  accent2: 'rgb(122, 55, 55)',      // Red
+  accent2Light: 'rgba(206, 13, 48, 0.88)',
+  accent3: 'rgba(255, 159, 64, 1)',      // Orange
+  accent3Light: 'rgba(255, 159, 64, 0.4)',
+  accent4: 'rgba(153, 102, 255, 1)',     // Purple
+  accent4Light: 'rgba(153, 102, 255, 0.4)',
+  gridLines: 'rgba(0, 0, 0, 0.07)',
+  textColor: 'rgba(45, 55, 72, 1)',
+  tooltipBackground: 'rgba(10, 10, 10, 0.9)'
+};
+
+const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterChartData, aggregation = 'none', selectedCharts = null }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [carouselKey, setCarouselKey] = useState(Date.now());
   const chartRefs = useRef({
@@ -446,10 +465,10 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
         padding: 6, // Reduced padding to move chart up
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: chartColorScheme.tooltipBackground,
         titleColor: '#fff',
         bodyColor: '#fff',
-        borderColor: 'rgba(75, 192, 192, 1)',
+        borderColor: chartColorScheme.primary,
         borderWidth: 1,
         padding: 10,
         displayColors: true,
@@ -499,7 +518,7 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
       x: {
         grid: {
           display: true,
-          color: 'rgba(0, 0, 0, 0.05)'
+          color: chartColorScheme.gridLines
         },
         ticks: {
           maxTicksLimit: 8, // Reduced number of ticks
@@ -516,7 +535,7 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
       y: {
         grid: {
           display: true,
-          color: 'rgba(0, 0, 0, 0.05)'
+          color: chartColorScheme.gridLines
         },
         beginAtZero: false,
         ticks: {
@@ -620,56 +639,112 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
     }]
   };
 
-  // Enhanced line chart data with area fill
+  // Enhanced line chart data with improved styling and area fill
   const enhancedLineChartData = filteredChartData.line ? {
     ...filteredChartData.line,
-    datasets: filteredChartData.line.datasets.map(dataset => ({
-      ...dataset,
-      tension: 0.3, // Add curve to the line
-      fill: true, // Add area fill
-      pointRadius: 3,
-      pointHoverRadius: 7, // Enlarged point on hover
-      pointHoverBackgroundColor: '#fff',
-      pointHoverBorderWidth: 2,
-    }))
+    datasets: filteredChartData.line.datasets.map((dataset, index) => {
+      // Assign colors based on dataset index
+      const colorSet = index === 0 
+        ? { main: chartColorScheme.accent1, light: chartColorScheme.accent1Light }
+        : { main: chartColorScheme.accent2, light: chartColorScheme.accent2Light };
+      
+      return {
+        ...dataset,
+        borderColor: colorSet.main,
+        backgroundColor: colorSet.light,
+        borderWidth: 2,
+        tension: 0.3, // Add curve to the line
+        fill: true, // Add area fill
+        pointRadius: 4,
+        pointHoverRadius: 7, // Enlarged point on hover
+        pointBackgroundColor: colorSet.main,
+        pointHoverBackgroundColor: '#fff',
+        pointBorderColor: colorSet.main,
+        pointHoverBorderColor: colorSet.main,
+        pointBorderWidth: 2,
+        pointHoverBorderWidth: 2,
+      };
+    })
   } : fallbackChart;
 
-  // Enhanced bar chart data
+  // Enhanced bar chart data with improved styling
   const enhancedBarChartData = filteredChartData.bar ? {
     ...filteredChartData.bar,
-    datasets: filteredChartData.bar.datasets.map(dataset => ({
+    datasets: filteredChartData.bar.datasets.map((dataset, index) => ({
       ...dataset,
+      backgroundColor: chartColorScheme.secondary,
+      borderColor: chartColorScheme.primary,
       borderWidth: 1,
-      hoverBackgroundColor: 'rgba(75, 192, 192, 0.8)', // Highlight on hover
-      hoverBorderColor: 'rgba(75, 192, 192, 1)',
+      borderRadius: 3, // Rounded corners on bars
+      hoverBackgroundColor: chartColorScheme.secondaryLight,
+      hoverBorderColor: chartColorScheme.primary,
+      hoverBorderWidth: 2,
+      // Add a subtle shadow effect
+      shadowOffsetX: 1,
+      shadowOffsetY: 1,
+      shadowBlur: 2,
+      shadowColor: 'rgba(0, 0, 0, 0.2)'
     }))
   } : fallbackChart;
 
-  // Enhanced doughnut chart data for better hover effects
+  // Enhanced doughnut chart data for better hover effects and consistent colors
   const enhancedDoughnutChartData = filteredChartData.doughnut ? {
     ...filteredChartData.doughnut,
     datasets: filteredChartData.doughnut.datasets.map(dataset => ({
       ...dataset,
-      hoverOffset: 12, // Makes the segment pop out on hover
+      backgroundColor: [
+        chartColorScheme.primary,         // AVEVA blue for System Fluid State
+        chartColorScheme.accent1,         // Teal for Flow
+        chartColorScheme.accent2,         // Red for Pressure
+      ],
+      hoverBackgroundColor: [
+        chartColorScheme.primaryLight,
+        chartColorScheme.accent1Light,
+        chartColorScheme.accent2Light,
+      ],
+      borderColor: '#ffffff',
+      hoverOffset: 15,                    // Makes the segment pop out on hover
       borderWidth: 2,
-      hoverBorderColor: '#fff',
+      hoverBorderColor: '#ffffff',
+      borderRadius: 4,                    // Rounded corners on segments
     }))
   } : fallbackChart;
 
-  // Enhanced scatter chart data
+  // Enhanced scatter chart data with consistent styling
   const enhancedScatterChartData = filteredChartData.scatter ? {
     ...filteredChartData.scatter,
     datasets: filteredChartData.scatter.datasets.map(dataset => ({
       ...dataset,
-      pointRadius: 5,
-      pointHoverRadius: 8, // Enlarged point on hover
-      pointHoverBackgroundColor: '#fff',
-      pointBorderColor: 'rgba(75, 192, 192, 1)',
+      // Color points based on efficiency (using our consistent color scheme)
+      backgroundColor: Array.isArray(dataset.data) ? 
+        dataset.data.map(point => {
+          const efficiency = point.efficiency || 0;
+          if (efficiency > 75) {
+            return chartColorScheme.primary; // High efficiency - AVEVA blue
+          } else if (efficiency > 50) {
+            return chartColorScheme.accent1; // Medium efficiency - teal
+          } else if (efficiency > 25) {
+            return chartColorScheme.accent3; // Low efficiency - orange
+          } else {
+            return chartColorScheme.accent2; // Very low efficiency - red
+          }
+        }) : 
+        chartColorScheme.accent1,
+      pointRadius: Array.isArray(dataset.data) ? 
+        dataset.data.map(point => Math.max(4, Math.min(10, (point.efficiency || 0) / 10))) : 
+        5,
+      pointHoverRadius: Array.isArray(dataset.data) ? 
+        dataset.data.map(point => Math.max(6, Math.min(12, (point.efficiency || 0) / 8))) : 
+        8,
+      pointBorderColor: '#ffffff',
+      pointBorderWidth: 1.5,
+      pointHoverBorderWidth: 2,
+      pointHoverBackgroundColor: '#ffffff'
     }))
   } : fallbackChart;
 
   // Define chart components with proper ref assignment - IMPROVED RENDERING APPROACH
-  const charts = [
+  const allCharts = [
     {
       title: 'Line Chart',
       render: () => (
@@ -696,7 +771,7 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
           />
         </div>
       ),
-      type: 'bar'
+      type: 'radar'  // Note: In FilterOptions it's called 'radar' but we render a Bar chart
     },
     {
       title: 'Distribution',
@@ -727,6 +802,11 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
       type: 'scatter'
     }
   ];
+  
+  // Filter charts based on selectedCharts prop
+  const charts = selectedCharts 
+    ? allCharts.filter(chart => selectedCharts[chart.type]) 
+    : allCharts;
 
   const handlePrevious = () => {
     // Clean up current chart instance before switching
@@ -807,7 +887,7 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
                 onDateFilterChange={handleDateFilterChange}
                 title="Date Filter"
               />
-              {activeFilters.date && (
+              {activeFilters.date && chartDateFilter && (
                 <div className="filter-indicator">
                   <span className="text-xs text-green-600">
                     {new Date(chartDateFilter.start).toLocaleDateString()} - 
