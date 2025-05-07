@@ -1597,6 +1597,7 @@ function App() {
             <li>
               <span className="material-icons">dashboard</span>
               {!isSidebarCollapsed && <span className="nav-text">Dashboard</span>}
+              <a href="/" className="nav-link"></a>
             </li>
             <li>
               <span className="material-icons">settings</span>

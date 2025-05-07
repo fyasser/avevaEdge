@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import './DataTable.css';
+import { aggregateData } from './utils/aggregationUtils'; // Import the aggregation utility
 
 // Function to export data to CSV
 const exportToCSV = (data, filename) => {
@@ -128,14 +129,31 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
     Time_Stamp: true,
     rTotalQ: true,
     rTotalQPercentage: true,
-    systemFluidState: true
+    systemFluidState: true // Correct key for System Fluid State
   });
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [highlightCondition, setHighlightCondition] = useState('none'); // 'none', 'high-flow', 'low-pressure', 'optimal-state'
+  const [aggregationLevel, setAggregationLevel] = useState('none'); // 'none', 'minute', 'day', 'month'
   const tableRef = useRef(null);
   const exportDropdownRef = useRef(null);
   const columnSelectorRef = useRef(null);
+
+  // Effect to handle clicks outside of dropdowns
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target)) {
+        setShowColumnSelector(false);
+      }
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target)) {
+        setExportDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [columnSelectorRef, exportDropdownRef]); // Added refs to dependency array
 
   // Calculate table metrics
   const tableMetrics = useMemo(() => {
@@ -194,7 +212,14 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
   };
 
   const processedData = useMemo(() => {
-    let processed = tableData;
+    let dataToProcess = tableData;
+
+    // Apply aggregation if a level is selected
+    if (aggregationLevel !== 'none') {
+      dataToProcess = aggregateData(tableData, aggregationLevel);
+    }
+
+    let processed = dataToProcess;
     
     // Apply search filter
     if (searchTerm) {
@@ -212,11 +237,13 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
     
     // Apply sorting
     if (sortConfig.key) {
+      // When aggregating, Time_Stamp might be a string like YYYY-MM-DD or YYYY-MM. Adjust sorting if necessary.
+      // For now, direct date/string sorting might work for YYYY-MM-DD but might need refinement for month names or mixed formats.
       processed = sortData(processed, sortConfig.key, sortConfig.direction);
     }
     
     return processed;
-  }, [tableData, searchTerm, sortConfig]);
+  }, [tableData, searchTerm, sortConfig, aggregationLevel]); // Added aggregationLevel to dependencies
   
   const toggleRowExpansion = (rowId) => {
     setExpandedRows(prev => ({
@@ -311,17 +338,48 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
     return date.toLocaleString();
   };
 
+  // Define ALL possible table headers with correct keys and consistent structure
+  const allHeadersDefinition = useMemo(() => [
+    { key: 'Time_Stamp', label: 'Timestamp', textAlign: 'left' },
+    { key: 'rTotalQ', label: 'Flow (m³/h)', textAlign: 'right' },
+    { key: 'rTotalQPercentage', label: 'Pressure (kPa)', textAlign: 'right' },
+    { key: 'systemFluidState', label: 'System Fluid State', textAlign: 'left' }, // Corrected key from 'counter'
+  ], []);
+
+  // Filter headers based on visibility state - this 'headers' variable will be used for rendering
+  const headers = useMemo(() => {
+    return allHeadersDefinition.filter(header => visibleColumns[header.key]);
+  }, [allHeadersDefinition, visibleColumns]);
+
+  // Moved and corrected useMemo for pagination logic
+  // This hook calculates the data for the current page and total pages.
+  // It must be called unconditionally, before any early returns.
+  // It now uses `currentPage` and `rowsPerPage` props.
+  const { currentPageData, totalPages } = useMemo(() => {
+    // Guard against processedData not being ready or invalid pagination props
+    if (!processedData || processedData.length === 0 || !rowsPerPage || rowsPerPage <= 0 || !currentPage || currentPage < 1) {
+      return {
+        currentPageData: [], // Return empty data if inputs are invalid
+        totalPages: 0,
+      };
+    }
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    return {
+      currentPageData: processedData.slice(startIndex, endIndex),
+      totalPages: Math.ceil(processedData.length / rowsPerPage),
+    };
+  }, [processedData, currentPage, rowsPerPage]); // Dependencies are props
+
   if (!tableData || tableData.length === 0) {
+    // This early return is now safe as all hooks are called before it.
     return <div className="table-responsive">No data available</div>;
   }
 
-  // Define table headers, ensuring they match the data structure
-  const headers = [
-    { key: 'Time_Stamp', label: 'Timestamp', textAlign: 'left' }, // Specify text alignment for each header
-    { key: 'rTotalQ', label: 'Flow (m³/h)', textAlign: 'right' },
-    { key: 'rTotalQPercentage', label: 'Pressure (kPa)', textAlign: 'right' },
-    { key: 'counter', label: 'System Fluid State', textAlign: 'left' },
-  ];
+  // The 'memoizedCurrentPage' variable, previously destructured from a useMemo hook,
+  // is no longer created here as the hook now directly uses the 'currentPage' prop
+  // for its internal calculations, and this specific useMemo focuses on returning
+  // paginated data and total pages, not a separate current page value.
 
   return (
     <div className="enhanced-data-table">
@@ -377,7 +435,6 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
         )}
       </div>
 
-      {/* Search and Filter Controls */}
       <div className="table-controls">
         <div className="search-container">
           <input
@@ -411,7 +468,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
               <span className="button-text">Columns</span>
             </button>
             {showColumnSelector && (
-              <div className="dropdown-menu column-selector">
+              <div className="dropdown-menu column-selector show"> {/* Added 'show' class */}
                 <h4>Show/Hide Columns</h4>
                 <div className="column-options">
                   <label className="column-option">
@@ -462,6 +519,45 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
               </div>
             )}
           </div>
+
+          {/* Time Aggregation Selector */}
+          <div className="dropdown">
+            <button
+              className="action-button"
+              onClick={() => document.getElementById('aggregation-dropdown').classList.toggle('show')}
+              aria-label="Select time aggregation"
+              title="Aggregate data by time"
+            >
+              <span className="button-icon">⏱️</span>
+              <span className="button-text">Aggregate</span>
+            </button>
+            <div id="aggregation-dropdown" className="dropdown-menu">
+              <button
+                className={`dropdown-item ${aggregationLevel === 'none' ? 'active' : ''}`}
+                onClick={() => { setAggregationLevel('none'); document.getElementById('aggregation-dropdown').classList.remove('show'); }}
+              >
+                Raw Data
+              </button>
+              <button
+                className={`dropdown-item ${aggregationLevel === 'minute' ? 'active' : ''}`}
+                onClick={() => { setAggregationLevel('minute'); document.getElementById('aggregation-dropdown').classList.remove('show'); }}
+              >
+                Average per Minute
+              </button>
+              <button
+                className={`dropdown-item ${aggregationLevel === 'day' ? 'active' : ''}`}
+                onClick={() => { setAggregationLevel('day'); document.getElementById('aggregation-dropdown').classList.remove('show'); }}
+              >
+                Average per Day
+              </button>
+              <button
+                className={`dropdown-item ${aggregationLevel === 'month' ? 'active' : ''}`}
+                onClick={() => { setAggregationLevel('month'); document.getElementById('aggregation-dropdown').classList.remove('show'); }}
+              >
+                Average per Month
+              </button>
+            </div>
+          </div>
           
           {/* Export Data */}
           <div className="dropdown" ref={exportDropdownRef}>
@@ -475,7 +571,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
               <span className="button-text">Export</span>
             </button>
             {exportDropdownOpen && (
-              <div className="dropdown-menu">
+              <div className="dropdown-menu show"> {/* Added 'show' class */}
                 <button 
                   className="dropdown-item"
                   onClick={() => {
@@ -542,8 +638,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
             </select>
           </div>
         </div>
-      </div>
-
+      </div>,
       {/* Enhanced Data Table */}
       <div className="table-container">
         <table>
@@ -558,12 +653,11 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
             </tr>
           </thead>
           <tbody>
-            {processedData
-              .slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage)
-              .map((row, index, currentPageRows) => {
-                const rowId = `${currentPage}-${index}`;
+            {currentPageData // Use currentPageData which is already paginated
+              .map((row, index, currentPageRowsArray) => { // currentPageRowsArray is currentPageData
+                const rowId = `${currentPage}-${index}`; // Unique ID for the row
                 const isExpanded = expandedRows[rowId] || false;
-                const previousRow = index > 0 ? currentPageRows[index - 1] : null;
+                const previousRow = index > 0 ? currentPageRowsArray[index - 1] : null;
                 
                 // Calculate trends
                 const flowTrend = calculateTrend(row, previousRow, 'rTotalQ');
@@ -577,11 +671,15 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                 
                 return (
                   <React.Fragment key={rowId}>
-                    <tr className={`data-row ${isExpanded ? 'expanded' : ''}`}>
+                    <tr 
+                      key={rowId} // Corrected: Was rowIndex, now uses defined rowId.
+                      className={`data-row ${expandedRows[rowId] ? 'expanded' : ''} ${aggregationLevel !== 'none' ? 'aggregated-row' : ''}`} // Corrected: Was expandedRowIndex === rowIndex, now uses expandedRows[rowId]
+                      onClick={(e) => { e.stopPropagation(); toggleRowExpansion(rowId); }} // Corrected: Was rowIndex, now uses rowId. Added stopPropagation.
+                    >
                       <td className="expand-cell">
                         <button 
                           className="expand-button"
-                          onClick={() => toggleRowExpansion(rowId)}
+                          onClick={(e) => { e.stopPropagation(); toggleRowExpansion(rowId); }} // Added stopPropagation for consistency
                           aria-label={isExpanded ? "Hide details" : "Show details"}
                         >
                           {isExpanded ? '−' : '+'}
@@ -594,31 +692,61 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
 
                         if (header.key === 'systemFluidState') {
                           const { description, color } = getFluidStateDescription(value);
-                          // Ensure raw value is displayed correctly, even if null or undefined
-                          const rawValueDisplay = (value === null || value === undefined || isNaN(parseFloat(value))) 
+                          const rawValueDisplay = (value === null || value === undefined || isNaN(parseFloat(value)))
                                                   ? 'N/A' 
                                                   : parseFloat(value).toFixed(2);
                           return (
-                            <td key={header.key} style={cellStyle}>
+                            <td key={header.key} style={cellStyle} className="system-fluid-state-cell">
                               <span 
                                 className="fluid-state-indicator"
-                                style={{ backgroundColor: description === 'N/A' ? 'transparent' : color }} // Hide indicator if N/A
+                                style={{ backgroundColor: description === 'N/A' ? 'transparent' : color }}
                               ></span>
-                              {description} (Raw: {rawValueDisplay})
+                              {description} 
+                              {aggregationLevel !== 'none' && <span className="avg-value-label">(Avg: {rawValueDisplay})</span>}
+                              {aggregationLevel === 'none' && <span className="raw-value-label">({rawValueDisplay})</span>} 
                             </td>
                           );
                         } else if (header.key === 'Time_Stamp') {
+                          let displayTimestamp = 'N/A';
+                          let aggregationLabel = '';
+                          if (value) {
+                            const date = new Date(value);
+                            if (aggregationLevel === 'minute') {
+                              displayTimestamp = date.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                              aggregationLabel = '(Minute Avg)';
+                            } else if (aggregationLevel === 'day') {
+                              displayTimestamp = date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+                              aggregationLabel = '(Day Avg)';
+                            } else if (aggregationLevel === 'month') {
+                              // For month, value might be YYYY-MM string from aggregation
+                              if (typeof value === 'string' && value.includes('-')) {
+                                const [year, month] = value.split('-');
+                                displayTimestamp = new Date(year, month -1).toLocaleDateString([], { year: 'numeric', month: 'long' });
+                              } else {
+                                displayTimestamp = date.toLocaleDateString([], { year: 'numeric', month: 'long' });
+                              }
+                              aggregationLabel = '(Month Avg)';
+                            } else {
+                              displayTimestamp = date.toLocaleString();
+                            }
+                          }
                           return (
-                            <td key={header.key} style={cellStyle}>
-                              {value ? new Date(value).toLocaleString() : 'N/A'} {/* Handle null/undefined timestamps */}
+                            <td key={header.key} style={cellStyle} className="timestamp-cell">
+                              {displayTimestamp} 
+                              {aggregationLevel !== 'none' && <span className="aggregation-period-label">{aggregationLabel}</span>}
+                              {row.aggregated_count && aggregationLevel !== 'none' && 
+                                <span className="aggregated-count-badge prominent">
+                                  {row.aggregated_count} records
+                                </span>
+                              }
                             </td>
                           );
                         } else if (typeof value === 'number') {
-                          // Apply right alignment for numbers, ensure it overrides default if header specifies differently
                           cellStyle.textAlign = header.textAlign || 'right'; 
                           return (
-                            <td key={header.key} style={cellStyle}>
+                            <td key={header.key} style={cellStyle} className="numeric-cell">
                               {value.toFixed(2)}
+                              {aggregationLevel !== 'none' && <span className="avg-marker">avg</span>}
                             </td>
                           );
                         } else if (value === null || value === undefined) {
@@ -643,7 +771,16 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                         <td colSpan={Object.values(visibleColumns).filter(Boolean).length + 1}>
                           <div className="row-details">
                             <div className="details-header">
-                              <h4>Details for {formatDate(row.Time_Stamp)}</h4>
+                              <h4>
+                                Details for {aggregationLevel === 'none' 
+                                  ? formatDate(row.Time_Stamp) 
+                                  : `${row.Time_Stamp_display || row.Time_Stamp} ${row.Time_Stamp_aggregation_label || ''}`}
+                              </h4>
+                              {aggregationLevel !== 'none' && row.aggregated_count && 
+                                <span className="aggregated-records-info prominent">
+                                  (Aggregated from {row.aggregated_count} records)
+                                </span>
+                              }
                               <div className="details-actions">
                                 <button 
                                   className="details-action-button" 
