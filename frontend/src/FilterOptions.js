@@ -452,15 +452,6 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
           >
             Generate Report
           </button>
-          
-          <button 
-            type="button"
-            onClick={resetFilters}
-            className="secondary-button"
-            disabled={isFiltering}
-          >
-            Reset
-          </button>
         </div>
       </form>
     </div>
