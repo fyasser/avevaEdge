@@ -474,18 +474,21 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
         displayColors: true,
         callbacks: {
           label: (context) => {
-            const label = context.dataset.label || '';
-            let value = context.parsed;
-            
-            // Handle different chart types
+            const segmentLabel = context.label || ''; // Label of the segment/data point
+            let valueLabel;
+
             if (context.chart.config.type === 'doughnut') {
-              value = context.parsed;
-              return `${label}: ${value}`;
+              // Display the parsed numerical value for doughnut charts
+              valueLabel = context.parsed;
+              return `${segmentLabel}: ${valueLabel}`;
             } else if (context.chart.config.type === 'scatter') {
-              return `${label} (${context.parsed.x.toFixed(2)}, ${context.parsed.y.toFixed(2)})`;
+              valueLabel = `(${context.parsed.x.toFixed(2)}, ${context.parsed.y.toFixed(2)})`;
+              const datasetLabel = context.dataset.label || '';
+              return `${datasetLabel}${segmentLabel ? (': ' + segmentLabel) : ''}: ${valueLabel}`;
             } else {
-              value = context.parsed.y;
-              return `${label}: ${value.toFixed(2)}`;
+              valueLabel = context.parsed.y !== undefined ? context.parsed.y.toFixed(2) : 'N/A';
+              const datasetLabel = context.dataset.label || '';
+              return `${datasetLabel}${segmentLabel ? (': ' + segmentLabel) : ''}: ${valueLabel}`;
             }
           }
         }
@@ -690,24 +693,26 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   // Enhanced doughnut chart data for better hover effects and consistent colors
   const enhancedDoughnutChartData = filteredChartData.doughnut ? {
     ...filteredChartData.doughnut,
-    datasets: filteredChartData.doughnut.datasets.map(dataset => ({
-      ...dataset,
-      backgroundColor: [
-        chartColorScheme.primary,         // AVEVA blue for System Fluid State
-        chartColorScheme.accent1,         // Teal for Flow
-        chartColorScheme.accent2,         // Red for Pressure
-      ],
-      hoverBackgroundColor: [
-        chartColorScheme.primaryLight,
-        chartColorScheme.accent1Light,
-        chartColorScheme.accent2Light,
-      ],
-      borderColor: '#ffffff',
-      hoverOffset: 15,                    // Makes the segment pop out on hover
-      borderWidth: 2,
-      hoverBorderColor: '#ffffff',
-      borderRadius: 4,                    // Rounded corners on segments
-    }))
+    datasets: filteredChartData.doughnut.datasets.map(dataset => {
+      return {
+        ...dataset,
+        backgroundColor: [
+          chartColorScheme.primary,         // AVEVA blue for System Fluid State
+          chartColorScheme.accent1,         // Teal for Flow
+          chartColorScheme.accent2,         // Red for Pressure
+        ],
+        hoverBackgroundColor: [
+          chartColorScheme.primaryLight,
+          chartColorScheme.accent1Light,
+          chartColorScheme.accent2Light,
+        ],
+        borderColor: '#ffffff',
+        hoverOffset: 15,                    // Makes the segment pop out on hover
+        borderWidth: 2,
+        hoverBorderColor: '#ffffff',
+        borderRadius: 4,                    // Rounded corners on segments
+      };
+    })
   } : fallbackChart;
 
   // Enhanced scatter chart data with consistent styling
