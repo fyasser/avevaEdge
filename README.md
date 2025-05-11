@@ -127,11 +127,5 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 ---
 
 ## Contributors
-- [Your Name] - Developer
-- [Contributor Name] - Designer
-- [Contributor Name] - Tester
-
+- [Farida Kassem] - Developer
 ---
-
-## Acknowledgments
-- Special thanks to the Aveva team for their support and resources.
