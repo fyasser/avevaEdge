@@ -77,7 +77,8 @@ const processDataItem = (item) => {
 
   const mappedItem = {
     ...item, // Spread original item first
-    systemFluidState: rawSystemFluidState // Override systemFluidState with the mapped value
+    systemFluidState: rawSystemFluidState, // Override systemFluidState with the mapped value
+    rNoise: item.cPlant_1_rNoise // Map cPlant_1_rNoise to rNoise
   };
 
   // Step 2: Parse numeric values including the potentially remapped systemFluidState
@@ -85,7 +86,8 @@ const processDataItem = (item) => {
     ...mappedItem,
     rTotalQ: parseNumericValue(mappedItem.rTotalQ, null),
     rTotalQPercentage: parseNumericValue(mappedItem.rTotalQPercentage, null),
-    systemFluidState: parseNumericValue(mappedItem.systemFluidState, null)
+    systemFluidState: parseNumericValue(mappedItem.systemFluidState, null),
+    rNoise: parseNumericValue(mappedItem.rNoise, null) // Parse rNoise as numeric value
   };
 };
 
@@ -137,13 +139,15 @@ function App() {
   // Add this state management for chart-specific aggregation levels
   const [chartAggregationLevels, setChartAggregationLevels] = useState({
     pressure: 'none',
-    flow: 'none'
+    flow: 'none',
+    noise: 'none' // Add noise to chartAggregationLevels state
   });
 
   // Add state for chart-specific date filters
   const [chartDateFilters, setChartDateFilters] = useState({
     pressure: null,
-    flow: null
+    flow: null,
+    noise: null // Add noise to chartDateFilters state
   });
 
   // Reference to socket.io connection
@@ -173,13 +177,18 @@ function App() {
       setIsConnected(false);
     });
     
-    // Handle initial data load - only triggered when user applies filters
+    // Add a log to verify if rNoise data is received correctly
     socketRef.current.on('initial-data', (data) => {
       console.log('Received initial data:', data.length, 'records');
-      
+    
       if (data.length > 0) {
         console.log('Sample data record:', data[0]);
+        console.log('rNoise values in data:', data.map(item => item.cPlant_1_rNoise)); // Log rNoise values
+    
         const processedData = data.map(processDataItem); // Process data
+        console.log('Sample processed data record:', processedData[0]);
+        console.log('Processed rNoise values:', processedData.map(item => item.rNoise)); // Log processed rNoise values
+        
         updateAllChartData(processedData);
         setLastUpdate(new Date());
         setTableData(processedData);
@@ -191,7 +200,7 @@ function App() {
         // Set empty chart data
         setEmptyChartData();
       }
-      
+    
       setIsLoading(false);
     });
     
@@ -417,6 +426,13 @@ function App() {
           data: displayData.map((item) => item.rTotalQPercentage),
           borderColor: 'rgba(255, 99, 132, 1)',
           backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          fill: true,
+        },
+        {
+          label: 'Noise',
+          data: displayData.map((item) => item.rNoise),
+          borderColor: 'rgba(153, 102, 255, 1)',
+          backgroundColor: 'rgba(153, 102, 255, 0.2)',
           fill: true,
         }
       ],
@@ -1669,6 +1685,13 @@ function App() {
               </p>
             </div>
           </div>
+          <div className="metric-card">
+            <span className="material-icons">volume_up</span>
+            <div className="metric-info">
+              <h3>Average Noise</h3>
+              <p>{metrics.averageNoise} dB</p>
+            </div>
+          </div>
         </section>
         
         {/* Main Filter Panel - Ensure it receives dataFilters and the handler */}
@@ -1781,6 +1804,46 @@ function App() {
                     dateRange={chartDateFilters.flow || (dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null)}
                     aggregation={chartAggregationLevels.flow || 'none'}
                     key={`flow-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}`}
+                    options={{
+                      plugins: {
+                        legend: {
+                          display: true,
+                        },
+                      },
+                      scales: {
+                        y: {
+                          beginAtZero: false,
+                        }
+                      }
+                    }}
+                  />
+                </div>
+                <div className="chart-box">
+                  <div className="chart-header">
+                    <h3>Noise Over Time</h3>
+                    <div className="chart-controls">
+                      <ChartDateFilter 
+                        data={tableData}
+                        dateField="Time_Stamp"
+                        onDateFilterChange={(dateFilter) => handleChartDateFilterChange('noise', dateFilter)}
+                        title="Date"
+                      />
+                      <TimeAggregation
+                        aggregationLevel={chartAggregationLevels.noise}
+                        onAggregationChange={(level) => handleChartAggregationChange('noise', level)}
+                      />
+                    </div>
+                  </div>
+                  <ReportChart 
+                    data={tableData}
+                    type="line"
+                    xField="Time_Stamp"
+                    yField="rNoise"
+                    title="Noise"
+                    style={{ width: '100%', height: '100%' }}
+                    dateRange={chartDateFilters.noise || (dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null)}
+                    aggregation={chartAggregationLevels.noise || 'none'}
+                    key={`noise-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}-${JSON.stringify(tableData?.slice(0,3).map(d => d.rNoise)).substring(0, 20)}`}
                     options={{
                       plugins: {
                         legend: {

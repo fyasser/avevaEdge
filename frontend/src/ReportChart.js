@@ -112,6 +112,13 @@ const ReportChart = ({
       console.log(`Filtering with dateRange: ${startDate} to ${endDate}`);
       console.log(`Before date filtering: ${updatedData.length} items`);
       
+      // Adjust end date to include the entire day
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        endDate = end.toISOString();
+      }
+      
       updatedData = updatedData.filter(item => {
         if (!item || !item[xField]) return false;
         
@@ -291,6 +298,12 @@ const ReportChart = ({
           primary: 'rgb(122, 55, 55)', // Red for pressure
           background: 'rgba(255, 99, 132, 0.2)',
           hover: 'rgba(255, 99, 132, 0.8)'
+        };
+      } else if (yField === "rNoise") { // Noise chart
+        return {
+          primary: 'rgba(153, 102, 255, 1)', // Purple for noise
+          background: 'rgba(153, 102, 255, 0.2)',
+          hover: 'rgba(153, 102, 255, 0.8)'
         };
       } else {
         return {

@@ -169,7 +169,7 @@ async function checkForNewData() {
                 
                 // Start building query for new data
                 let query = `
-                    SELECT Time_Stamp, Time_Stamp_ms, counter, rTotalQ, rTotalQPercentage 
+                    SELECT Time_Stamp, Time_Stamp_ms, counter, rTotalQ, rTotalQPercentage, cPlant_1_rNoise
                     FROM TREND001 
                     WHERE Time_Stamp > @lastPoll
                 `;
@@ -286,7 +286,7 @@ async function sendFilteredData(socket, filters) {
       
       // Build query
       let query = `
-          SELECT Time_Stamp, Time_Stamp_ms, counter, rTotalQ, rTotalQPercentage 
+          SELECT Time_Stamp, Time_Stamp_ms, counter, rTotalQ, rTotalQPercentage, cPlant_1_rNoise 
           FROM TREND001 
           WHERE 1=1
       `;
@@ -378,7 +378,7 @@ app.get('/api/trend-data', async (req, res) => {
         
         // Start building query
         let query = `
-            SELECT Time_Stamp, Time_Stamp_ms, counter, rTotalQ, rTotalQPercentage 
+            SELECT Time_Stamp, Time_Stamp_ms, counter, rTotalQ, rTotalQPercentage, cPlant_1_rNoise 
             FROM TREND001 
             WHERE 1=1
         `;

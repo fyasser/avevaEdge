@@ -344,6 +344,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
     { key: 'rTotalQ', label: 'Flow (m³/h)', textAlign: 'right' },
     { key: 'rTotalQPercentage', label: 'Pressure (kPa)', textAlign: 'right' },
     { key: 'systemFluidState', label: 'System Fluid State', textAlign: 'left' }, // Corrected key from 'counter'
+    { key: 'rNoise', label: 'Noise', textAlign: 'right' } // Added noise column
   ], []);
 
   // Filter headers based on visibility state - this 'headers' variable will be used for rendering
@@ -650,6 +651,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                   {header.label}
                 </th>
               ))}
+              <th>Noise</th>
             </tr>
           </thead>
           <tbody>
@@ -764,6 +766,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                           </td>
                         );
                       })}
+                      <td>{row.rNoise}</td>
                     </tr>
                     
                     {isExpanded && (

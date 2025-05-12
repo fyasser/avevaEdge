@@ -11,7 +11,9 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
     maxValue: '',
     filterField: 'rTotalQ', // Default to flow field
     threshold: '',
-    comparisonOperator: 'gt' // Default to greater than
+    comparisonOperator: 'gt', // Default to greater than
+    minNoise: '', // Add minNoise to state
+    maxNoise: '' // Add maxNoise to state
   });
 
   // State for aggregation filter
@@ -90,7 +92,9 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
       maxValue: '',
       filterField: 'rTotalQ',
       threshold: '',
-      comparisonOperator: 'gt'
+      comparisonOperator: 'gt',
+      minNoise: '', // Reset minNoise
+      maxNoise: '' // Reset maxNoise
     });
     setAggregation('none');
 
@@ -372,6 +376,25 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
                   {additionalFilters.comparisonOperator === 'gt' ? ' greater than' : ' less than'}
                   {additionalFilters.threshold ? ` ${additionalFilters.threshold}` : ' threshold'}
                 </div>
+              </div>
+
+              {/* Add noise filter options */}
+              <div className="filter-group">
+                <label>Noise Range:</label>
+                <input
+                  type="number"
+                  placeholder="Min Noise"
+                  name="minNoise"
+                  value={additionalFilters.minNoise}
+                  onChange={handleAdditionalFilterChange}
+                />
+                <input
+                  type="number"
+                  placeholder="Max Noise"
+                  name="maxNoise"
+                  value={additionalFilters.maxNoise}
+                  onChange={handleAdditionalFilterChange}
+                />
               </div>
             </div>
           </div>
