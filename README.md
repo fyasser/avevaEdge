@@ -11,7 +11,7 @@ The AvevaEdge Dashboard Application is a web-based platform designed to visualiz
 - **Dashboard Layout**: Includes a sidebar, top bar, and main content area for charts and data tables.
 - **Data Visualization**: Supports line charts, scatter plots, doughnut charts, and bar charts.
 - **Filters and Aggregation**: Allows users to filter data by date range, thresholds, and aggregation levels.
-- **Data Table**: Displays raw data with search, pagination, and sorting capabilities.
+- **Data Table**: Displays raw data with search, pagination, sorting capabilities, and comprehensive insights for key metrics including flow, pressure, fluid state, and noise levels.
 - **Real-Time Updates**: Uses Socket.IO to fetch and display new data dynamically.
 - **Dark Mode**: Provides a toggle for light and dark themes.
 - **Report Generation**: Generates and downloads HTML reports of the dashboard state.
@@ -28,11 +28,12 @@ The AvevaEdge Dashboard Application is a web-based platform designed to visualiz
 ## Technologies Used
 
 ### Frontend
-- **React**: For building the user interface.
-- **Chart.js**: For rendering interactive charts.
+- **React**: For building the user interface and managing component state.
+- **Chart.js**: For rendering interactive charts with real-time updates and customized visualizations.
 - **Tailwind CSS**: For styling and responsive design.
-- **FileSaver.js**: For downloading reports.
+- **FileSaver.js**: For downloading reports and exporting data.
 - **Date-fns**: For date formatting and manipulation.
+- **Custom Data Analysis Tools**: For generating insights, trend analysis, and metric correlations.
 
 ### Backend
 - **Node.js**: For server-side logic.
@@ -48,7 +49,10 @@ The AvevaEdge Dashboard Application is a web-based platform designed to visualiz
 ### Frontend
 - **`src/`**: Contains all React components and utilities.
   - **`App.js`**: Main component managing the dashboard layout and state.
-  - **`components/`**: Modular components like `ReportChart`, `FilterOptions`, and `DataTable`.
+  - **`DataTable.js`**: Advanced data visualization component with metrics analysis for flow, pressure, system fluid state, and noise data, featuring detailed insights and trend analysis.
+  - **`ReportChart.js`**: Component for rendering and managing different chart types.
+  - **`ChartCarousel.js`**: Component for displaying multiple charts in a carousel format.
+  - **`FilterOptions.js`**: Component for data filtering controls.
   - **`utils/`**: Utility functions for data processing and chart management.
   - **`public/`**: Static assets like `index.html` and icons.
 
@@ -100,10 +104,30 @@ The AvevaEdge Dashboard Application is a web-based platform designed to visualiz
 
 ---
 
+## Key Metrics Tracked
+
+The AvevaEdge Dashboard monitors and analyzes several critical operational metrics:
+
+- **Flow (m³/h)**: Measures the volume of fluid moving through the system per hour.
+- **Pressure (kPa)**: Tracks the pressure levels within the system in kilopascals.
+- **System Fluid State**: A composite metric representing the overall state of the fluid system on a scale of 0-100.
+- **Noise (dB)**: Measures acoustic emissions from the system, which can indicate mechanical issues or abnormal operation.
+
+Each metric includes detailed analysis with statistical summaries, trend identification, and correlation analysis to help identify issues and optimize system performance.
+
+---
+
 ## Usage
 - **Filters**: Apply filters to refine data displayed in charts and tables.
 - **Real-Time Updates**: View live data updates without refreshing the page.
 - **Report Generation**: Generate and download reports for analysis.
+- **Data Analysis**:
+  - **Enhanced Data Table**: View comprehensive metrics and insights for flow, pressure, system fluid state, and noise levels.
+  - **Metric Summaries**: Access statistical summaries including averages, minimums, and maximums for all key metrics.
+  - **Trend Analysis**: View trend indicators showing whether metrics are rising, falling, or stable.
+  - **Correlation Analysis**: Analyze relationships between different metrics like flow-pressure and noise-flow correlations.
+  - **Column Customization**: Show/hide columns as needed for focused analysis.
+  - **Time Aggregation**: Aggregate data by minute, day, or month for trend identification.
 
 ---
 
