@@ -41,10 +41,12 @@ ChartJS.register(
   Filler
 );
 
+import COLORS from './utils/colorConstants'; // Import centralized color definitions
+
 // Define a consistent color palette for all charts
 const chartColorScheme = {
-  primary: 'rgb(9, 56, 92)',       // AVEVA blue
-  primaryLight: 'rgba(0, 79, 139, 0.7)', // AVEVA blue lighter
+  primary: COLORS.AVEVA_BLUE,
+  primaryLight: COLORS.AVEVA_BLUE_LIGHT,
   secondary:'rgb(7, 92, 158)',     // Secondary blue
   secondaryLight: 'rgb(241, 0, 0)',
   accent1: 'rgb(6, 56, 122)',      // Teal
@@ -55,19 +57,19 @@ const chartColorScheme = {
   accent3Light: 'rgba(5, 12, 84, 0.6)',
   accent4: 'rgba(153, 102, 255, 1)',     // Purple
   accent4Light: 'rgba(153, 102, 255, 0.4)',
-  // Noise colors for visualization
-  noiseWarning: 'rgba(255, 193, 7, 1)',  // AVEVA warning yellow for noise
-  noiseWarningLight: 'rgba(255, 193, 7, 0.2)', // Light version for backgrounds
-  noiseWarningHover: 'rgba(255, 193, 7, 0.8)', // Hover state for noise elements
+  // Noise colors for visualization - now using the centralized constants
+  noiseWarning: COLORS.NOISE_COLOR,
+  noiseWarningLight: COLORS.NOISE_BACKGROUND,
+  noiseWarningHover: COLORS.NOISE_HOVER,
   // Noise colors for background patterns and texture effects
   noiseLight: 'rgba(240, 240, 240, 0.4)',  // Subtle light noise
   noiseMedium: 'rgba(220, 220, 220, 0.5)', // Medium intensity noise
   noiseDark: 'rgba(200, 200, 200, 0.6)',   // More visible noise
   noiseColor1: 'rgba(230, 240, 255, 0.3)', // Blue tinted noise
   noiseColor2: 'rgba(255, 230, 230, 0.3)', // Red tinted noise
-  gridLines: 'rgba(0, 0, 0, 0.07)',
-  textColor: 'rgba(45, 55, 72, 1)',
-  tooltipBackground: 'rgba(10, 10, 10, 0.9)'
+  gridLines: COLORS.GRID_LINES,
+  textColor: COLORS.TEXT_COLOR,
+  tooltipBackground: COLORS.TOOLTIP_BACKGROUND
 };
 
 const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterChartData, aggregation = 'none', selectedCharts = null }) => {
@@ -715,8 +717,7 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
       barPercentage: 0.8,
       categoryPercentage: 0.7
     }))
-  } : fallbackChart;
-  // Enhanced doughnut chart data for better hover effects and consistent colors
+  } : fallbackChart;  // Enhanced doughnut chart data for better hover effects and consistent colors
   const enhancedDoughnutChartData = filteredChartData.doughnut ? {
     ...filteredChartData.doughnut,
     datasets: filteredChartData.doughnut.datasets.map(dataset => {
@@ -726,11 +727,13 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
           chartColorScheme.primary,         // AVEVA blue for System Fluid State
           chartColorScheme.accent1,         // Teal for Flow
           chartColorScheme.accent2,         // Red for Pressure
+          chartColorScheme.noiseWarning,    // AVEVA warning yellow for Noise
         ],
         hoverBackgroundColor: [
           chartColorScheme.primaryLight,
           chartColorScheme.accent1Light,
           chartColorScheme.accent2Light,
+          chartColorScheme.noiseWarningHover,
         ],
         borderColor: '#ffffff',
         hoverOffset: 15,                    // Makes the segment pop out on hover

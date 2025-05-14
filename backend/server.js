@@ -3,35 +3,36 @@ const http = require('http');
 const socketIo = require('socket.io');
 const sql = require('mssql'); // Import the mssql package
 const cors = require('cors'); // Import the cors package
+require('dotenv').config(); // Load environment variables from .env file
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000", // Allow frontend to connect
-    methods: ["GET", "POST"]
+    origin: process.env.SOCKET_CORS_ORIGIN || "http://localhost:3000", // Allow frontend to connect
+    methods: (process.env.SOCKET_METHODS || "GET,POST").split(',')
   }
 });
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 // Database configuration for the AvevaEdge project
 const config = {
-    user: "Edge",
-    password: "F'yabdellah2025",
-    server: "localhost", // Try connecting to localhost first
-    database: "simulationDB",
+    user: process.env.DB_USER || "Edge",
+    password: process.env.DB_PASSWORD || "F'yabdellah2025",
+    server: process.env.DB_SERVER || "localhost", // Use environment variable in production
+    database: process.env.DB_NAME || "simulationDB",
     options: {
-        encrypt: false, // Try without encryption
-        trustServerCertificate: true,
-        enableArithAbort: true,
-        connectTimeout: 60000,
-        requestTimeout: 60000,
-        instanceName: "SQLEXPRESS" // Specify instance name separately
+        encrypt: process.env.DB_ENCRYPT === 'true' || false,
+        trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true' || true,
+        enableArithAbort: process.env.DB_ENABLE_ARITH_ABORT === 'true' || true,
+        connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT || '60000'),
+        requestTimeout: parseInt(process.env.DB_REQUEST_TIMEOUT || '60000'),
+        instanceName: process.env.DB_INSTANCE || "SQLEXPRESS" // Specify instance name separately
     },
     pool: {
-        max: 10,
-        min: 0,
-        idleTimeoutMillis: 30000
+        max: parseInt(process.env.DB_POOL_MAX || '10'),
+        min: parseInt(process.env.DB_POOL_MIN || '0'),
+        idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000')
     }
 };
 

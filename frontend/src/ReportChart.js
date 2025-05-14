@@ -7,6 +7,7 @@ import {
   patchChartInstance,
   installGlobalErrorPrevention
 } from './utils/chartInstanceManager';
+import COLORS from './utils/colorConstants'; // Import centralized color definitions
 import ChartDateFilter from './ChartDateFilter';
 import ChartTimeFilter from './ChartTimeFilter';
 
@@ -295,14 +296,14 @@ const ReportChart = ({
         };
       } else if (yField === "rTotalQPercentage") { // Pressure chart
         return {
-          primary: 'rgb(122, 55, 55)', // Red for pressure
-          background: 'rgba(255, 99, 132, 0.2)',
+          primary: COLORS.PRESSURE_COLOR,
+          background: COLORS.PRESSURE_BACKGROUND,
           hover: 'rgba(255, 99, 132, 0.8)'
         };      } else if (yField === "rNoise") { // Noise chart
         return {
-          primary: 'rgba(255, 193, 7, 1)', // AVEVA warning yellow for noise - brighter and more visible
-          background: 'rgba(255, 193, 7, 0.2)', // Consistent background with primary color
-          hover: 'rgba(255, 193, 7, 0.8)'
+          primary: COLORS.NOISE_COLOR,
+          background: COLORS.NOISE_BACKGROUND, 
+          hover: COLORS.NOISE_HOVER
         };
       } else {
         return {
