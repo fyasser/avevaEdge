@@ -59,10 +59,9 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
   };
 
   // Reset all filters to default
-  const resetFilters = () => {
-    // Reset chart selection (all selected)
+  const resetFilters = () => {    // Reset chart selection (all selected)
     const resetCharts = {
-      radar: true,
+      bar: true,
       doughnut: true,
       line: true,
       scatter: true
@@ -178,10 +177,9 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
                   <span>Distribution</span>
                 </label>
                 <label className="filter-checkbox">
-                  <input
-                    type="checkbox"
-                    name="radar"
-                    checked={selectedCharts.radar}
+                  <input                    type="checkbox"
+                    name="bar"
+                    checked={selectedCharts.bar}
                     onChange={(e) => {
                       handleChartSelection(e);
                       setFilterApplied(false);
@@ -205,9 +203,8 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
               
               <div className="button-row">
                 <button 
-                  type="button" 
-                  onClick={() => {
-                    ['radar', 'doughnut', 'line', 'scatter'].forEach(chart => {
+                  type="button"                  onClick={() => {
+                    ['bar', 'doughnut', 'line', 'scatter'].forEach(chart => {
                       handleChartSelection({
                         target: { name: chart, checked: true }
                       });
@@ -219,9 +216,8 @@ function FilterOptions({ selectedCharts, handleChartSelection, dateRange, handle
                   Select All
                 </button>
                 <button 
-                  type="button" 
-                  onClick={() => {
-                    ['radar', 'doughnut', 'line', 'scatter'].forEach(chart => {
+                  type="button"                  onClick={() => {
+                    ['bar', 'doughnut', 'line', 'scatter'].forEach(chart => {
                       handleChartSelection({
                         target: { name: chart, checked: false }
                       });

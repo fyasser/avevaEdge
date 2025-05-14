@@ -298,12 +298,11 @@ const ReportChart = ({
           primary: 'rgb(122, 55, 55)', // Red for pressure
           background: 'rgba(255, 99, 132, 0.2)',
           hover: 'rgba(255, 99, 132, 0.8)'
-        };
-      } else if (yField === "rNoise") { // Noise chart
+        };      } else if (yField === "rNoise") { // Noise chart
         return {
-          primary: 'rgba(153, 102, 255, 1)', // Purple for noise
-          background: 'rgba(153, 102, 255, 0.2)',
-          hover: 'rgba(153, 102, 255, 0.8)'
+          primary: 'rgba(255, 193, 7, 1)', // AVEVA warning yellow for noise - brighter and more visible
+          background: 'rgba(255, 193, 7, 0.2)', // Consistent background with primary color
+          hover: 'rgba(255, 193, 7, 0.8)'
         };
       } else {
         return {

@@ -91,15 +91,14 @@ const processDataItem = (item) => {
   };
 };
 
-function App() {
-  const [chartData, setChartData] = useState(null);
+function App() {  const [chartData, setChartData] = useState(null);
   const [tableData, setTableData] = useState([]);
   const [doughnutChartData, setDoughnutChartData] = useState(null);
   const [lineChartData, setLineChartData] = useState(null);
   const [scatterChartData, setScatterChartData] = useState(null);
   const [chartRenderKey, setChartRenderKey] = useState(Date.now()); // Key for forcing chart rerenders
   const [selectedCharts, setSelectedCharts] = useState({
-    radar: true,
+    bar: true,
     doughnut: true,
     line: true,
     scatter: true
@@ -133,7 +132,8 @@ function App() {
     totalFlow: 0,
     totalPressure: 0,
     activeSensors: 0,
-    systemEfficiency: '0%'
+    systemEfficiency: '0%',
+    averageNoise: '0.00' // Added average noise metric
   });
 
   // Add this state management for chart-specific aggregation levels
@@ -161,14 +161,16 @@ function App() {
   useEffect(() => {
     // Initialize Socket.IO connection
     socketRef.current = io('http://localhost:5000');
-    
-    // Connection event
+      // Connection event
     socketRef.current.on('connect', () => {
       console.log('Connected to server via Socket.IO');
       setIsConnected(true);
       
-      // IMPORTANT: Don't send or request any data initially
-      // This prevents the automatic loading of all 6000 entries
+      // Send minimal filter settings to get some initial data for the chart carousel
+      // Use a small timeout to ensure connection is fully established
+      setTimeout(() => {
+        sendFilterSettings();
+      }, 500);
     });
     
     // Disconnection event
@@ -248,17 +250,10 @@ function App() {
       }
     };
   }, []);
-
   // Helper function to send current filter settings to the server
   const sendFilterSettings = () => {
     if (socketRef.current && socketRef.current.connected) {
-      // Only send filters if date range is set
-      if (!dateRange.start || !dateRange.end) {
-        console.log('Date range not set, not sending filter settings');
-        return;
-      }
-      
-      // Combine all filter settings
+      // Combine all filter settings (include date range even if not fully set)
       const filters = {
         ...dateRange,
         ...dataFilters,
@@ -284,50 +279,60 @@ function App() {
         backgroundColor: 'rgba(75, 192, 192, 0.6)',
       }]
     });
-    
-    // Empty doughnut chart
-    setDoughnutChartData({
-      labels: ['System Fluid State', 'Flow', 'Pressure'],
+      // Empty doughnut chart
+    setDoughnutChartData({      labels: ['System Fluid State', 'Flow', 'Pressure', 'Noise'],
       datasets: [{
-        data: [0, 0, 0],
+        data: [0, 0, 0, 0],
         backgroundColor: [
-          'rgba(54, 162, 235, 0.6)',
-          'rgba(75, 192, 192, 0.6)',
-          'rgba(255, 99, 132, 0.6)',
+          'rgba(54, 162, 235, 0.6)',  // Blue for System Fluid State
+          'rgba(75, 192, 192, 0.6)',  // Green for Flow
+          'rgba(255, 99, 132, 0.6)',  // Red for Pressure
+          'rgba(255, 193, 7, 0.6)',   // Yellow for Noise (AVEVA warning yellow)
         ],
       }]
     });
-    
-    // Empty line chart
+      // Empty line chart
     setLineChartData({
       labels: [],
       datasets: [
         {
-          label: 'Flow Over Time',
+          label: 'Flow',
           data: [],
           borderColor: 'rgba(75, 192, 192, 1)',
           backgroundColor: 'rgba(75, 192, 192, 0.2)',
           fill: true,
         },
         {
-          label: 'Pressure Over Time',
+          label: 'Pressure',
           data: [],
           borderColor: 'rgba(255, 99, 132, 1)',
           backgroundColor: 'rgba(255, 99, 132, 0.2)',
           fill: true,
+        },        {
+          label: 'Noise',
+          data: [],
+          borderColor: 'rgba(255, 193, 7, 1)',
+          backgroundColor: 'rgba(255, 193, 7, 0.2)',
+          fill: true,
         }
       ]
     });
-    
-    // Empty scatter chart
+      // Empty scatter chart
     setScatterChartData({
       datasets: [
         {
-          label: 'Flow vs Pressure (size: System Efficiency)',
+          label: 'Flow vs Pressure (size: System Fluid State)',
           data: [],
           backgroundColor: 'rgba(75, 192, 192, 0.6)',
           pointRadius: 3,
           pointHoverRadius: 5,
+        },
+        {          label: 'Flow vs Noise',
+          data: [],
+          backgroundColor: 'rgba(255, 193, 7, 0.7)', // Yellow for noise
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          hidden: false // Changed to visible by default
         },
       ]
     });
@@ -337,13 +342,23 @@ function App() {
       totalFlow: '0.00',
       totalPressure: '0.00',
       activeSensors: 0,
-      systemEfficiency: '0.00'
+      systemEfficiency: '0.00',
+      averageNoise: '0.00' // Added average noise metric
     });
   };
-
-  // Initialize with empty charts
+  // Initialize with empty charts and send initial filter settings
   useEffect(() => {
     setEmptyChartData();
+    
+    // Send initial filter settings to populate the carousel
+    // Add a small delay to ensure socket connection is established
+    const initialDataTimer = setTimeout(() => {
+      if (socketRef.current && socketRef.current.connected) {
+        sendFilterSettings();
+      }
+    }, 1000);
+    
+    return () => clearTimeout(initialDataTimer);
   }, []);
 
   // Function to update all chart types with new data
@@ -377,33 +392,66 @@ function App() {
       console.log(`Sampling data from ${sortedData.length} to ${displayData.length} points`);
     }
   
-    // Update Bar Chart data
+  // Update Bar Chart data
     const formattedChartData = {
       labels: displayData.map((item) => format(new Date(item.Time_Stamp), 'MMM dd HH:mm')),
       datasets: [
         {
           label: 'Flow',
-          data: displayData.map((item) => item.rTotalQ),
-          backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          data: displayData.map((item) => {
+            // Ensure we have valid numeric data
+            const value = parseFloat(item.rTotalQ);
+            return isNaN(value) ? null : value;
+          }),
+          backgroundColor: 'rgba(75, 192, 192, 0.8)',
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+          hoverBackgroundColor: 'rgba(75, 192, 192, 1)'
         },
+        {
+          label: 'Pressure',
+          data: displayData.map((item) => {
+            // Ensure we have valid numeric data
+            const value = parseFloat(item.rTotalQPercentage);
+            return isNaN(value) ? null : value;
+          }),
+          backgroundColor: 'rgba(255, 99, 133, 0.23)',
+          borderColor: 'rgba(255, 99, 132, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+          hoverBackgroundColor: 'rgba(255, 99, 132, 1)'
+        },
+        {          label: 'Noise',
+          data: displayData.map((item) => {
+            // Ensure we have valid numeric data
+            const value = parseFloat(item.rNoise);
+            return isNaN(value) ? null : value;
+          }),
+          backgroundColor: 'rgba(255, 193, 7, 0.8)', /* Changed to AVEVA warning yellow */
+          borderColor: 'rgba(255, 193, 7, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+          hoverBackgroundColor: 'rgba(255, 193, 7, 1)'
+        }
       ],
     };
     setChartData(formattedChartData);
-    
-    // Update Doughnut Chart data - renamed sensors to System Efficiency
+      // Update Doughnut Chart data - renamed sensors to System Efficiency
     const formattedDoughnutChartData = {
-      labels: ['System Fluid State', 'Flow', 'Pressure'],
+      labels: ['System Fluid State', 'Flow', 'Pressure', 'Noise'],
       datasets: [
         {
           data: [
             displayData.reduce((sum, item) => sum + item.systemFluidState, 0),
             displayData.reduce((sum, item) => sum + item.rTotalQ, 0),
             displayData.reduce((sum, item) => sum + item.rTotalQPercentage, 0),
-          ],
-          backgroundColor: [
+            displayData.reduce((sum, item) => sum + (item.rNoise || 0), 0),
+          ],          backgroundColor: [
             'rgba(54, 162, 235, 0.6)', // Blue for System Efficiency
             'rgba(75, 192, 192, 0.6)', // Green for Flow
             'rgba(255, 99, 132, 0.6)', // Red for Pressure
+            'rgba(255, 193, 7, 0.6)', // Yellow for Noise (AVEVA warning yellow)
           ],
         },
       ],
@@ -425,21 +473,20 @@ function App() {
           label: 'Pressure',
           data: displayData.map((item) => item.rTotalQPercentage),
           borderColor: 'rgba(255, 99, 132, 1)',
-          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          backgroundColor: 'rgba(243, 181, 197, 0.67)',
           fill: true,
         },
-        {
-          label: 'Noise',
+        {          label: 'Noise',
           data: displayData.map((item) => item.rNoise),
-          borderColor: 'rgba(153, 102, 255, 1)',
-          backgroundColor: 'rgba(153, 102, 255, 0.2)',
+          borderColor: 'rgba(255, 193, 7, 1)', // Changed to AVEVA warning yellow
+          backgroundColor: 'rgba(255, 193, 7, 0.2)',
           fill: true,
         }
       ],
     };
     setLineChartData(formattedLineChartData);
-    
-    // Update Scatter Chart data to compare Flow vs Pressure with System Efficiency as point size
+      // Update Scatter Chart data to compare Flow vs Pressure with System Efficiency as point size
+    // Create two scatter chart datasets - one for the original comparison and one for noise
     const formattedScatterChartData = {
       datasets: [
         {
@@ -449,6 +496,7 @@ function App() {
             y: item.rTotalQPercentage,
             r: Math.max(3, Math.min(10, item.systemFluidState / 10)), // Size based on System Fluid State (scaled)
             efficiency: item.systemFluidState,
+            noise: item.rNoise, // Include noise data for tooltip
             timestamp: format(new Date(item.Time_Stamp), 'MMM dd HH:mm:ss')
           })),
           backgroundColor: displayData.map(item => {
@@ -467,6 +515,18 @@ function App() {
           pointRadius: displayData.map(item => Math.max(3, Math.min(10, item.systemFluidState / 10))),
           pointHoverRadius: displayData.map(item => Math.max(5, Math.min(15, item.systemFluidState / 8))),
         },
+        {          label: 'Flow vs Noise',
+          data: displayData.map((item) => ({
+            x: item.rTotalQ,
+            y: item.rNoise,
+            r: 3, // Fixed size for noise points
+            timestamp: format(new Date(item.Time_Stamp), 'MMM dd HH:mm:ss')
+          })),
+          backgroundColor: 'rgba(255, 193, 7, 0.7)', // Changed to AVEVA warning yellow
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          hidden: false // Show by default, can be toggled via legend
+        },
       ],
     };
     setScatterChartData(formattedScatterChartData);
@@ -478,12 +538,15 @@ function App() {
       displayData.reduce((sum, item) => sum + (item.rTotalQPercentage || 0), 0) / displayData.length : 0;
     const avgSystemFluidState = displayData.length > 0 ? 
       displayData.reduce((sum, item) => sum + (item.systemFluidState || 0), 0) / displayData.length : 0;
+    const avgNoise = displayData.length > 0 ?
+      displayData.reduce((sum, item) => sum + (item.rNoise || 0), 0) / displayData.length : 0;
     
     setMetrics({
       totalFlow: avgFlow.toFixed(2),
       totalPressure: avgPressure.toFixed(2),
       systemEfficiency: isNaN(avgSystemFluidState) ? '0.00%' : avgSystemFluidState.toFixed(2),
-      activeSensors: displayData.reduce((max, item) => Math.max(max, item.systemFluidState || 0), 0) // Use max systemFluidState as sensor count
+      activeSensors: displayData.reduce((max, item) => Math.max(max, item.systemFluidState || 0), 0), // Use max systemFluidState as sensor count
+      averageNoise: isNaN(avgNoise) ? '0.00' : avgNoise.toFixed(2) // Add average noise metric
     });
   };
 
@@ -1580,7 +1643,7 @@ function App() {
 
     // Create and download the file
     const blob = new Blob([fullContent], { type: 'text/html;charset=utf-8' });
-    saveAs(blob, `aveva_report_${new Date().toISOString().split('T')[0]}.html`);
+    saveAs(blob, `aveva_report_${new Date().getTime()}.html`);
   }
 
   // Show initial empty state or loading indicator
@@ -1736,8 +1799,8 @@ function App() {
                   }}
                 />
               </section>
-              
-              <div className="charts-row">
+                {/* First row with Pressure and Flow charts */}
+              <div className="charts-row two-column-charts">
                 <div className="chart-box">
                   <div className="chart-header">
                     <h3>Pressure Over Time</h3>
@@ -1753,14 +1816,13 @@ function App() {
                         onAggregationChange={(level) => handleChartAggregationChange('pressure', level)}
                       />
                     </div>
-                  </div>
-                  <ReportChart 
+                  </div>                  <ReportChart 
                     data={tableData}
                     type="line"
                     xField="Time_Stamp"
                     yField="rTotalQPercentage" 
                     title="Pressure"
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: '100%', height: '100%', maxWidth: '100%' }}
                     dateRange={chartDateFilters.pressure || (dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null)}
                     aggregation={chartAggregationLevels.pressure || 'none'}
                     key={`pressure-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}`} 
@@ -1793,14 +1855,13 @@ function App() {
                         onAggregationChange={(level) => handleChartAggregationChange('flow', level)}
                       />
                     </div>
-                  </div>
-                  <ReportChart 
+                  </div>                  <ReportChart 
                     data={tableData}
                     type="line"
                     xField="Time_Stamp"
                     yField="rTotalQ"
                     title="Flow"
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: '100%', height: '100%', maxWidth: '100%' }}
                     dateRange={chartDateFilters.flow || (dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null)}
                     aggregation={chartAggregationLevels.flow || 'none'}
                     key={`flow-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}`}
@@ -1818,6 +1879,10 @@ function App() {
                     }}
                   />
                 </div>
+              </div>
+              
+              {/* Second row with Noise chart */}
+              <div className="charts-row single-chart-row">
                 <div className="chart-box">
                   <div className="chart-header">
                     <h3>Noise Over Time</h3>
@@ -1833,14 +1898,13 @@ function App() {
                         onAggregationChange={(level) => handleChartAggregationChange('noise', level)}
                       />
                     </div>
-                  </div>
-                  <ReportChart 
+                  </div>                  <ReportChart 
                     data={tableData}
                     type="line"
                     xField="Time_Stamp"
                     yField="rNoise"
                     title="Noise"
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: '100%', height: '100%', maxWidth: '100%' }}
                     dateRange={chartDateFilters.noise || (dateRange.start && dateRange.end ? [dateRange.start, dateRange.end] : null)}
                     aggregation={chartAggregationLevels.noise || 'none'}
                     key={`noise-chart-${chartRenderKey}-${lastUpdate?.getTime() || Date.now()}-${JSON.stringify(tableData?.slice(0,3).map(d => d.rNoise)).substring(0, 20)}`}

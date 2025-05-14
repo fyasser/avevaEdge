@@ -48,13 +48,23 @@ const chartColorScheme = {
   secondary:'rgb(7, 92, 158)',     // Secondary blue
   secondaryLight: 'rgb(241, 0, 0)',
   accent1: 'rgb(6, 56, 122)',      // Teal
-  accent1Light: 'rgba(133, 207, 207, 0.12)',
+  accent1Light: 'rgba(133, 207, 207, 0.07)',
   accent2: 'rgb(109, 40, 40)',      // Red
-  accent2Light: 'rgba(242, 147, 165, 0.88)',
-  accent3: 'rgba(255, 159, 64, 1)',      // Orange
-  accent3Light: 'rgba(255, 159, 64, 0.4)',
+  accent2Light: 'rgba(242, 147, 164, 0.09)',
+  accent3: 'rgb(80, 64, 255)',      // Orange
+  accent3Light: 'rgba(5, 12, 84, 0.6)',
   accent4: 'rgba(153, 102, 255, 1)',     // Purple
   accent4Light: 'rgba(153, 102, 255, 0.4)',
+  // Noise colors for visualization
+  noiseWarning: 'rgba(255, 193, 7, 1)',  // AVEVA warning yellow for noise
+  noiseWarningLight: 'rgba(255, 193, 7, 0.2)', // Light version for backgrounds
+  noiseWarningHover: 'rgba(255, 193, 7, 0.8)', // Hover state for noise elements
+  // Noise colors for background patterns and texture effects
+  noiseLight: 'rgba(240, 240, 240, 0.4)',  // Subtle light noise
+  noiseMedium: 'rgba(220, 220, 220, 0.5)', // Medium intensity noise
+  noiseDark: 'rgba(200, 200, 200, 0.6)',   // More visible noise
+  noiseColor1: 'rgba(230, 240, 255, 0.3)', // Blue tinted noise
+  noiseColor2: 'rgba(255, 230, 230, 0.3)', // Red tinted noise
   gridLines: 'rgba(0, 0, 0, 0.07)',
   textColor: 'rgba(45, 55, 72, 1)',
   tooltipBackground: 'rgba(10, 10, 10, 0.9)'
@@ -646,10 +656,26 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   const enhancedLineChartData = filteredChartData.line ? {
     ...filteredChartData.line,
     datasets: filteredChartData.line.datasets.map((dataset, index) => {
-      // Assign colors based on dataset index
-      const colorSet = index === 0 
-        ? { main: chartColorScheme.accent1, light: chartColorScheme.accent1Light }
-        : { main: chartColorScheme.accent2, light: chartColorScheme.accent2Light };
+      // Determine if this dataset contains noise data
+      const isNoiseData = dataset.label && 
+        (dataset.label.toLowerCase().includes('noise') || 
+         dataset.yAxisID === 'rNoise' || 
+         (dataset.data && dataset.data.some(point => point && point.hasOwnProperty('rNoise'))));
+      
+      // Assign colors based on dataset type and index
+      let colorSet;
+      if (isNoiseData) {
+        // Use the noise color scheme for noise data
+        colorSet = { 
+          main: chartColorScheme.noiseWarning || 'rgba(255, 193, 7, 1)',  // AVEVA warning yellow
+          light: chartColorScheme.noiseWarningLight || 'rgba(255, 193, 7, 0.2)' 
+        };
+      } else {
+        // Use the regular color scheme for non-noise data
+        colorSet = index === 0 
+          ? { main: chartColorScheme.accent1, light: chartColorScheme.accent1Light }
+          : { main: chartColorScheme.accent2, light: chartColorScheme.accent2Light };
+      }
       
       return {
         ...dataset,
@@ -669,27 +695,27 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
       };
     })
   } : fallbackChart;
-
   // Enhanced bar chart data with improved styling
   const enhancedBarChartData = filteredChartData.bar ? {
     ...filteredChartData.bar,
     datasets: filteredChartData.bar.datasets.map((dataset, index) => ({
       ...dataset,
-      backgroundColor: chartColorScheme.secondary,
-      borderColor: chartColorScheme.primary,
+      backgroundColor: index === 0 ? chartColorScheme.accent1 : chartColorScheme.accent2,
+      borderColor: index === 0 ? chartColorScheme.primary : chartColorScheme.secondaryLight,
       borderWidth: 1,
-      borderRadius: 3, // Rounded corners on bars
-      hoverBackgroundColor: chartColorScheme.secondaryLight,
-      hoverBorderColor: chartColorScheme.primary,
+      borderRadius: 4, // Rounded corners on bars
+      hoverBackgroundColor: index === 0 ? chartColorScheme.primary : chartColorScheme.accent2Light,
+      hoverBorderColor: index === 0 ? chartColorScheme.primary : chartColorScheme.accent2,
       hoverBorderWidth: 2,
       // Add a subtle shadow effect
       shadowOffsetX: 1,
       shadowOffsetY: 1,
       shadowBlur: 2,
-      shadowColor: 'rgba(0, 0, 0, 0.2)'
+      shadowColor: 'rgba(0, 0, 0, 0.2)',
+      barPercentage: 0.8,
+      categoryPercentage: 0.7
     }))
   } : fallbackChart;
-
   // Enhanced doughnut chart data for better hover effects and consistent colors
   const enhancedDoughnutChartData = filteredChartData.doughnut ? {
     ...filteredChartData.doughnut,
@@ -718,34 +744,47 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
   // Enhanced scatter chart data with consistent styling
   const enhancedScatterChartData = filteredChartData.scatter ? {
     ...filteredChartData.scatter,
-    datasets: filteredChartData.scatter.datasets.map(dataset => ({
-      ...dataset,
-      // Color points based on efficiency (using our consistent color scheme)
-      backgroundColor: Array.isArray(dataset.data) ? 
-        dataset.data.map(point => {
-          const efficiency = point.efficiency || 0;
-          if (efficiency > 75) {
-            return chartColorScheme.primary; // High efficiency - AVEVA blue
-          } else if (efficiency > 50) {
-            return chartColorScheme.accent1; // Medium efficiency - teal
-          } else if (efficiency > 25) {
-            return chartColorScheme.accent3; // Low efficiency - orange
-          } else {
-            return chartColorScheme.accent2; // Very low efficiency - red
-          }
-        }) : 
-        chartColorScheme.accent1,
-      pointRadius: Array.isArray(dataset.data) ? 
-        dataset.data.map(point => Math.max(4, Math.min(10, (point.efficiency || 0) / 10))) : 
-        5,
-      pointHoverRadius: Array.isArray(dataset.data) ? 
-        dataset.data.map(point => Math.max(6, Math.min(12, (point.efficiency || 0) / 8))) : 
-        8,
-      pointBorderColor: '#ffffff',
-      pointBorderWidth: 1.5,
-      pointHoverBorderWidth: 2,
-      pointHoverBackgroundColor: '#ffffff'
-    }))
+    datasets: filteredChartData.scatter.datasets.map(dataset => {
+      // Determine if this dataset contains noise data
+      const isNoiseData = dataset.label && 
+        (dataset.label.toLowerCase().includes('noise') || 
+         dataset.yAxisID === 'rNoise' || 
+         (dataset.data && dataset.data.some(point => point && point.hasOwnProperty('rNoise'))));
+        return {
+        ...dataset,
+        // Color points based on dataset type or efficiency (using our consistent color scheme)
+        backgroundColor: Array.isArray(dataset.data) ? 
+          dataset.data.map(point => {
+            // Check if this is noise-related data point
+            if (isNoiseData || (point && point.rNoise !== undefined)) {
+              return chartColorScheme.noiseWarning || 'rgba(255, 193, 7, 1)'; // AVEVA warning yellow
+            }
+            
+            // Default coloring by efficiency
+            const efficiency = point.efficiency || 0;
+            if (efficiency > 75) {
+              return chartColorScheme.primary; // High efficiency - AVEVA blue
+            } else if (efficiency > 50) {
+              return chartColorScheme.accent1; // Medium efficiency - teal
+            } else if (efficiency > 25) {
+              return chartColorScheme.accent3; // Low efficiency - orange
+            } else {
+              return chartColorScheme.accent2; // Very low efficiency - red
+            }
+          }) : 
+          isNoiseData ? (chartColorScheme.noiseWarning || 'rgba(255, 193, 7, 1)') : chartColorScheme.accent1,
+        pointRadius: Array.isArray(dataset.data) ? 
+          dataset.data.map(point => Math.max(4, Math.min(10, (point.efficiency || 0) / 10))) : 
+          5,
+        pointHoverRadius: Array.isArray(dataset.data) ? 
+          dataset.data.map(point => Math.max(6, Math.min(12, (point.efficiency || 0) / 8))) : 
+          8,
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 1.5,
+        pointHoverBorderWidth: 2,
+        pointHoverBackgroundColor: '#ffffff'
+      };
+    })
   } : fallbackChart;
 
   // Define chart components with proper ref assignment - IMPROVED RENDERING APPROACH
@@ -772,11 +811,39 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
             key={`bar-${carouselKey}`}
             ref={setBarChartRef}
             data={enhancedBarChartData} 
-            options={getCommonOptions('Bar Chart')} 
+            options={{
+              ...getCommonOptions('Bar Chart'),
+              scales: {
+                x: {
+                  grid: {
+                    display: false
+                  },
+                  title: {
+                    display: true,
+                    text: 'Time',
+                    color: chartColorScheme.textColor
+                  },
+                  ticks: {
+                    maxRotation: 45,
+                    minRotation: 45
+                  }
+                },
+                y: {
+                  grid: {
+                    color: chartColorScheme.gridLines
+                  },
+                  title: {
+                    display: true,
+                    text: 'Value',
+                    color: chartColorScheme.textColor
+                  },
+                  beginAtZero: false
+                }
+              }
+            }} 
           />
-        </div>
-      ),
-      type: 'radar'  // Note: In FilterOptions it's called 'radar' but we render a Bar chart
+        </div>      ),
+      type: 'bar'  // Fixed: Changed from 'radar' to 'bar' to match the actual chart type
     },
     {
       title: 'Distribution',
@@ -948,13 +1015,13 @@ const ChartCarousel = ({ lineChartData, chartData, doughnutChartData, scatterCha
           </span>
         </div>
       )}
-      
-      <div className="chart-container w-full h-[480px] mb-4 relative">
+        <div className="chart-container w-full h-[480px] mb-4 relative">
         {/* Chart render */}
         {charts[currentIndex].render()}
         
         {/* No data overlay */}
-        {(filteredChartData[charts[currentIndex].type]?.datasets[0]?.data?.length === 0 ||
+        {(!filteredChartData[charts[currentIndex].type]?.datasets || 
+          filteredChartData[charts[currentIndex].type]?.datasets[0]?.data?.length === 0 ||
          (filteredChartData[charts[currentIndex].type]?.labels?.length === 0 && 
           charts[currentIndex].type !== 'scatter')) && (
           <div className="no-data-overlay absolute inset-0 flex items-center justify-center bg-white bg-opacity-80">

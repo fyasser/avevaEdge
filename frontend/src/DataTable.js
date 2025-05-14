@@ -124,12 +124,12 @@ const getFluidStateDescription = (value) => {
 function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, setRowsPerPage, currentPage, setCurrentPage }) {
   const [sortConfig, setSortConfig] = useState({ key: 'Time_Stamp', direction: 'descending' });
   const [expandedRows, setExpandedRows] = useState({});
-  const [showSummary, setShowSummary] = useState(true);
-  const [visibleColumns, setVisibleColumns] = useState({
+  const [showSummary, setShowSummary] = useState(true);  const [visibleColumns, setVisibleColumns] = useState({
     Time_Stamp: true,
     rTotalQ: true,
     rTotalQPercentage: true,
-    systemFluidState: true // Correct key for System Fluid State
+    systemFluidState: true, // Correct key for System Fluid State
+    rNoise: true // Added noise to visible columns
   });
   const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -154,7 +154,6 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [columnSelectorRef, exportDropdownRef]); // Added refs to dependency array
-
   // Calculate table metrics
   const tableMetrics = useMemo(() => {
     if (!tableData || tableData.length === 0) return null;
@@ -178,10 +177,18 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
     const avgFluidState = fluidStateValues.length > 0 ? 
       fluidStateValues.reduce((sum, val) => sum + val, 0) / fluidStateValues.length : 0;
       
+    // Get noise metrics
+    const noiseValues = tableData.map(row => row.rNoise).filter(val => val !== undefined && !isNaN(val));
+    const avgNoise = noiseValues.length > 0 ? 
+      noiseValues.reduce((sum, val) => sum + val, 0) / noiseValues.length : 0;
+    const maxNoise = noiseValues.length > 0 ? Math.max(...noiseValues) : 0;
+    const minNoise = noiseValues.length > 0 ? Math.min(...noiseValues) : 0;
+      
     return {
       flow: { avg: avgFlow, max: maxFlow, min: minFlow },
       pressure: { avg: avgPressure, max: maxPressure, min: minPressure },
-      fluidState: { avg: avgFluidState }
+      fluidState: { avg: avgFluidState },
+      noise: { avg: avgNoise, max: maxNoise, min: minNoise }
     };
   }, [tableData]);
 
@@ -220,8 +227,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
     }
 
     let processed = dataToProcess;
-    
-    // Apply search filter
+      // Apply search filter
     if (searchTerm) {
       processed = processed.filter((row) => 
         // Search in Time_Stamp
@@ -231,7 +237,9 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
         // Search in rTotalQPercentage
         (row.rTotalQPercentage !== undefined && row.rTotalQPercentage.toString().includes(searchTerm)) ||
         // Search in systemFluidState
-        (row.systemFluidState !== undefined && row.systemFluidState.toString().includes(searchTerm))
+        (row.systemFluidState !== undefined && row.systemFluidState.toString().includes(searchTerm)) ||
+        // Search in rNoise
+        (row.rNoise !== undefined && row.rNoise.toString().includes(searchTerm))
       );
     }
     
@@ -268,8 +276,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
       return { description: 'Poor', color: '#dc2626' }; // Red
     }
   };
-  
-  // Determine if a value is abnormal
+    // Determine if a value is abnormal
   const getValueStatus = (value, field) => {
     if (value === undefined || value === null || !tableMetrics) return 'normal';
     
@@ -290,10 +297,15 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
       if (value >= 80) return 'high';
     }
     
+    if (field === 'rNoise') {
+      const avg = tableMetrics.noise.avg;
+      if (value > avg * 1.3) return 'high'; // Higher noise is typically undesirable
+      if (value < avg * 0.7) return 'low';
+    }
+    
     return 'normal';
   };
-  
-  // Calculate trend indicators for a row
+    // Calculate trend indicators for a row
   const calculateTrend = (current, previous, field) => {
     if (!current || !previous || current[field] === undefined || previous[field] === undefined) {
       return 'neutral';
@@ -312,6 +324,13 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
       if (diff > 10) return 'up-significant';
       if (diff > 0) return 'up';
       if (diff < -10) return 'down-significant';
+      if (diff < 0) return 'down';
+    }
+    
+    if (field === 'rNoise') {
+      if (diff > 3) return 'up-significant'; // Higher noise is generally concerning
+      if (diff > 0) return 'up';
+      if (diff < -3) return 'down-significant';
       if (diff < 0) return 'down';
     }
     
@@ -399,8 +418,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
         
         {/* Summary Section */}
         {showSummary && tableMetrics && (
-          <div className="data-summary">
-            <div className="summary-card">
+          <div className="data-summary">            <div className="summary-card">
               <div className="summary-title">Flow</div>
               <div className="summary-value">{tableMetrics.flow.avg.toFixed(2)} m³/h</div>
               <div className="summary-range">
@@ -423,6 +441,14 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                 <span className="fluid-state-label">
                   {getFluidStateDescription(tableMetrics.fluidState.avg).description}
                 </span>
+              </div>
+            </div>
+            <div className="summary-card">
+              <div className="summary-title">Noise</div>
+              <div className="summary-value">{tableMetrics.noise.avg.toFixed(2)} dB</div>
+              <div className="summary-range">
+                <span>Min: {tableMetrics.noise.min.toFixed(2)}</span>
+                <span>Max: {tableMetrics.noise.max.toFixed(2)}</span>
               </div>
             </div>
             <div className="summary-card">
@@ -504,8 +530,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                       }))}
                     />
                     Pressure (kPa)
-                  </label>
-                  <label className="column-option">
+                  </label>                  <label className="column-option">
                     <input 
                       type="checkbox" 
                       checked={visibleColumns.systemFluidState}
@@ -515,6 +540,17 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                       }))}
                     />
                     System Fluid State
+                  </label>
+                  <label className="column-option">
+                    <input 
+                      type="checkbox" 
+                      checked={visibleColumns.rNoise}
+                      onChange={() => setVisibleColumns(prev => ({ 
+                        ...prev, 
+                        rNoise: !prev.rNoise
+                      }))}
+                    />
+                    Noise
                   </label>
                 </div>
               </div>
@@ -636,14 +672,12 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
               <option value={20}>20</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
-            </select>
-          </div>
+            </select>          </div>
         </div>
-      </div>,
+      </div>
       {/* Enhanced Data Table */}
       <div className="table-container">
-        <table>
-          <thead>
+        <table><thead>
             <tr>
               <th className="expand-column"></th>
               {headers.map(header => (
@@ -651,7 +685,6 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                   {header.label}
                 </th>
               ))}
-              <th>Noise</th>
             </tr>
           </thead>
           <tbody>
@@ -665,11 +698,13 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                 const flowTrend = calculateTrend(row, previousRow, 'rTotalQ');
                 const pressureTrend = calculateTrend(row, previousRow, 'rTotalQPercentage');
                 const fluidStateTrend = calculateTrend(row, previousRow, 'systemFluidState');
+                const noiseTrend = calculateTrend(row, previousRow, 'rNoise');
                 
                 // Get status for coloring
                 const flowStatus = getValueStatus(row.rTotalQ, 'rTotalQ');
                 const pressureStatus = getValueStatus(row.rTotalQPercentage, 'rTotalQPercentage');
                 const fluidState = getFluidStateDescription(row.systemFluidState);
+                const noiseStatus = getValueStatus(row.rNoise, 'rNoise');
                 
                 return (
                   <React.Fragment key={rowId}>
@@ -732,8 +767,7 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                               displayTimestamp = date.toLocaleString();
                             }
                           }
-                          return (
-                            <td key={header.key} style={cellStyle} className="timestamp-cell">
+                          return (                          <td key={header.key} style={cellStyle} className="timestamp-cell">
                               {displayTimestamp} 
                               {aggregationLevel !== 'none' && <span className="aggregation-period-label">{aggregationLabel}</span>}
                               {row.aggregated_count && aggregationLevel !== 'none' && 
@@ -766,7 +800,6 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                           </td>
                         );
                       })}
-                      <td>{row.rNoise}</td>
                     </tr>
                     
                     {isExpanded && (
@@ -797,9 +830,8 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                                 </button>
                               </div>
                             </div>
-                            
-                            <div className="details-metrics-overview">
-                              {/* Flow, Pressure, and Fluid State high-level indicators */}
+                              <div className="details-metrics-overview">
+                              {/* Flow, Pressure, Fluid State and Noise high-level indicators */}
                               <div className={`metric-pill ${flowStatus}`}>
                                 <span className="metric-label">Flow:</span>
                                 <span className="metric-value">{row.rTotalQ?.toFixed(2) || 'N/A'}</span>
@@ -814,6 +846,11 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                                 <span className="metric-label">Fluid State:</span>
                                 <span className="metric-value" style={{ color: fluidState.color }}>{row.systemFluidState?.toFixed(1) || 'N/A'}</span>
                                 <span className="metric-unit">{fluidState.description}</span>
+                              </div>
+                              <div className={`metric-pill ${noiseStatus}`}>
+                                <span className="metric-label">Noise:</span>
+                                <span className="metric-value">{row.rNoise?.toFixed(2) || 'N/A'}</span>
+                                <span className="metric-unit">dB</span>
                               </div>
                             </div>
                             
@@ -1052,6 +1089,85 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                                 </div>
                               </div>
                               
+                              {/* Noise Analysis Card */}
+                              <div className="detail-card">
+                                <div className="detail-card-header">
+                                  <h5>Noise Analysis</h5>
+                                  <div className={`trend-badge trend-badge-${noiseTrend}`}>
+                                    {getBadgeText(noiseTrend)}
+                                  </div>
+                                </div>
+                                <div className="detail-value">
+                                  <div className="detail-main-value">
+                                    <span className="primary">{row.rNoise?.toFixed(2) || 'N/A'} dB</span>
+                                    {noiseTrend !== 'neutral' && (
+                                      <span className={`trend-arrow trend-${noiseTrend}`}></span>
+                                    )}
+                                  </div>
+                                  
+                                  {tableMetrics && row.rNoise !== undefined && (
+                                    <>
+                                      <div className="comparison-bar-container">
+                                        <div className="min-max-labels">
+                                          <span className="min-label">Min: {tableMetrics.noise.min.toFixed(1)}</span>
+                                          <span className="max-label">Max: {tableMetrics.noise.max.toFixed(1)}</span>
+                                        </div>
+                                        <div className="comparison-bar">
+                                          <div 
+                                            className="avg-marker"
+                                            style={{ 
+                                              left: `${Math.min(100, Math.max(0, (tableMetrics.noise.avg - tableMetrics.noise.min) / 
+                                                (tableMetrics.noise.max - tableMetrics.noise.min) * 100))}%` 
+                                            }}
+                                            title={`Average: ${tableMetrics.noise.avg.toFixed(2)}`}
+                                          ></div>
+                                          <div 
+                                            className={`value-marker ${noiseStatus}`}
+                                            style={{ 
+                                              left: `${Math.min(100, Math.max(0, (row.rNoise - tableMetrics.noise.min) / 
+                                                (tableMetrics.noise.max - tableMetrics.noise.min) * 100))}%` 
+                                            }}
+                                          ></div>
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="metric-comparison">
+                                        <span className="label">vs. Average:</span>
+                                        <span className={`value ${noiseStatus}`}>
+                                          {((row.rNoise / tableMetrics.noise.avg - 1) * 100).toFixed(1)}%
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="position-indicator">
+                                        {row.rNoise > tableMetrics.noise.avg ? (
+                                          <span className="above-indicator">Above average</span>
+                                        ) : (
+                                          <span className="below-indicator">Below average</span>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="insights">
+                                        {(() => { // Wrap IIFE in a block
+                                          let noise_insights; // Declare variable
+                                          if (row.rNoise > tableMetrics.noise.max * 0.9) {
+                                            noise_insights = "Noise level is near maximum recorded value. Check equipment for mechanical issues.";
+                                          } else if (row.rNoise < tableMetrics.noise.min * 1.1) {
+                                            noise_insights = "Noise level is unusually low. Verify sensor functionality.";
+                                          } else if (noiseTrend === 'up-significant') {
+                                            noise_insights = "Noise level is increasing rapidly. Investigate potential equipment degradation.";
+                                          } else if (noiseTrend === 'down-significant') {
+                                            noise_insights = "Noise level is decreasing rapidly. Check if operational parameters have changed.";
+                                          } else {
+                                            noise_insights = "Noise level is within normal operational range.";
+                                          }
+                                          return <p>{noise_insights}</p>; // Render the insight
+                                        })()}
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              
                               <div className="detail-card correlations">
                                 <h5>Data Point Analysis</h5>
                                 <div className="correlations-content">
@@ -1098,17 +1214,76 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                                     })()}
                                   </div>
                                   
+                                  <div className="correlation-insight">
+                                    <h6>Noise-Flow Correlation</h6>
+                                    {(() => {
+                                      if (!row.rNoise || !row.rTotalQ) {
+                                        return (
+                                          <div className="correlation-normal">
+                                            <span className="normal-icon">ℹ️</span>
+                                            <span>Insufficient data to analyze noise-flow correlation.</span>
+                                          </div>
+                                        );
+                                      }
+                                      
+                                      const noiseRatio = row.rNoise / tableMetrics.noise.avg;
+                                      const flowRatio = row.rTotalQ / tableMetrics.flow.avg;
+                                      const difference = Math.abs(noiseRatio - flowRatio);
+                                      
+                                      if (noiseRatio > 1.3 && flowRatio > 1.2) {
+                                        return (
+                                          <div className="correlation-warning">
+                                            <span className="warning-icon">⚠️</span>
+                                            <span>
+                                              High noise levels correlate with high flow. 
+                                              This may indicate turbulence or cavitation in the system.
+                                            </span>
+                                          </div>
+                                        );
+                                      } else if (noiseRatio > 1.3 && flowRatio < 0.8) {
+                                        return (
+                                          <div className="correlation-warning">
+                                            <span className="warning-icon">⚠️</span>
+                                            <span>
+                                              High noise with low flow may indicate mechanical issues 
+                                              or blockages in the system.
+                                            </span>
+                                          </div>
+                                        );
+                                      } else if (difference > 0.4) {
+                                        return (
+                                          <div className="correlation-notice">
+                                            <span className="notice-icon">ℹ️</span>
+                                            <span>
+                                              Noise and flow levels show unusual correlation.
+                                              Consider inspecting system components.
+                                            </span>
+                                          </div>
+                                        );
+                                      } else {
+                                        return (
+                                          <div className="correlation-normal">
+                                            <span className="normal-icon">✓</span>
+                                            <span>
+                                              Noise and flow values are within expected correlation ranges.
+                                            </span>
+                                          </div>
+                                        );
+                                      }
+                                    })()}
+                                  </div>
+                                  
                                   <div className="system-recommendation">
                                     <h6>System Recommendation</h6>
                                     <div className="recommendation-content">
-                                      {(() => {
-                                        const issues = [];
+                                      {(() => {                                        const issues = [];
                                         
                                         if (flowStatus === 'high') issues.push("high flow");
                                         if (flowStatus === 'low') issues.push("low flow");
                                         if (pressureStatus === 'high') issues.push("high pressure");
                                         if (pressureStatus === 'low') issues.push("low pressure");
                                         if (row.systemFluidState < 40) issues.push("poor fluid state");
+                                        if (noiseStatus === 'high') issues.push("high noise");
                                         
                                         if (issues.length > 0) {
                                           return (
@@ -1117,12 +1292,12 @@ function DataTable({ tableData = [], searchTerm, setSearchTerm, rowsPerPage, set
                                                 System attention required due to: {issues.join(", ")}.
                                               </p>
                                               <p>
-                                                Recommended action: 
-                                                {issues.includes("high flow") && " Check for excessive demand or system misconfiguration."}
+                                                Recommended action:                                                {issues.includes("high flow") && " Check for excessive demand or system misconfiguration."}
                                                 {issues.includes("low flow") && " Inspect for blockages or restrictions in flow path."}
                                                 {issues.includes("high pressure") && " Verify pressure relief mechanisms are functioning."}
                                                 {issues.includes("low pressure") && " Check pump operation and system for leaks."}
                                                 {issues.includes("poor fluid state") && " Schedule maintenance for fluid quality improvement."}
+                                                {issues.includes("high noise") && " Inspect for mechanical issues or turbulence in system."}
                                               </p>
                                             </>
                                           );
