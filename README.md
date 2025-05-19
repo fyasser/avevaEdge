@@ -40,7 +40,6 @@ The AvevaEdge Dashboard Application is a web-based platform designed to visualiz
 - **Express**: For building RESTful APIs.
 - **Socket.IO**: For real-time communication.
 - **MSSQL**: For database operations.
-- **Python**: For advanced report generation (via `generate_report.py`).
 
 ---
 
@@ -59,7 +58,6 @@ The AvevaEdge Dashboard Application is a web-based platform designed to visualiz
 ### Backend
 - **`server.js`**: Main server file handling API routes, Socket.IO events, and database connections.
 - **`db-simulator.js`**: Simulates database operations for testing purposes.
-- **`generate_report.py`**: Python script for generating detailed reports.
 - **`routes/`**: API routes for data fetching and report generation.
 
 ---
@@ -69,7 +67,6 @@ The AvevaEdge Dashboard Application is a web-based platform designed to visualiz
 ### Prerequisites
 - **Node.js**: Install the latest version.
 - **SQL Server**: Ensure a running instance with the required database.
-- **Python**: For running the report generation script.
 
 ### Installation
 1. Clone the repository:

@@ -3,7 +3,53 @@ const http = require('http');
 const socketIo = require('socket.io');
 const sql = require('mssql'); // Import the mssql package
 const cors = require('cors'); // Import the cors package
-require('dotenv').config(); // Load environment variables from .env file
+const fs = require('fs');
+const path = require('path');
+
+// Custom environment variable loader (replacing dotenv)
+function loadEnvFile() {
+    try {
+        const envPath = path.resolve(__dirname, '.env');
+        if (fs.existsSync(envPath)) {
+            const envContent = fs.readFileSync(envPath, 'utf8');
+            const envLines = envContent.split('\n');
+            
+            envLines.forEach(line => {
+                // Skip comments and empty lines
+                if (line.trim() === '' || line.trim().startsWith('#') || line.trim().startsWith('//')) {
+                    return;
+                }
+                
+                // Split by the first = character
+                const parts = line.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    // Join the rest with = in case there are = in the value
+                    let value = parts.slice(1).join('=').trim();
+                    
+                    // Remove comments at end of line
+                    const commentIndex = value.indexOf('#');
+                    if (commentIndex !== -1) {
+                        value = value.substring(0, commentIndex).trim();
+                    }
+                    
+                    // Strip quotes if present
+                    if ((value.startsWith('"') && value.endsWith('"')) || 
+                        (value.startsWith("'") && value.endsWith("'"))) {
+                        value = value.substring(1, value.length - 1);
+                    }
+                    
+                    process.env[key] = value;
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading .env file:', error);
+    }
+}
+
+// Load environment variables
+loadEnvFile();
 
 const app = express();
 const server = http.createServer(app);
