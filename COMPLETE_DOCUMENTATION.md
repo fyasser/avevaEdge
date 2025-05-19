@@ -255,6 +255,8 @@ Before installing dependencies, you need to clone the project repository:
 
 All database connection settings are now stored in a single file: `backend/.env`
 
+> **Video Tutorial**: For a visual step-by-step guide on connecting the AvevaEdge project with a database, watch [this tutorial video](https://www.youtube.com/watch?v=XedGddiUzHU).
+
 ### Database Setup Steps
 
 #### Step 1: Create the Database
