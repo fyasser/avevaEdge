@@ -1,7 +1,6 @@
 # AvevaEdge Dashboard - User Guide
 
 ## Table of Contents
-61:  
 1. [Overview](#overview)
 2. [Quick Setup Guide](#quick-setup-guide)
 3. [Common Problems and Solutions](#troubleshooting)
@@ -76,8 +75,22 @@ Before you begin, ensure you have administrator privileges on your PC and have i
    - Add database configuration details (see Database Configuration section for details)
 
 5. **Start the Application**:
-   - In one terminal: `cd backend && node server.js`
-   - In another terminal: `cd frontend && npm start`
+   - In one terminal:
+     ```powershell
+     cd backend
+     nodemon server.js
+     ```
+     or
+     ```powershell
+     cd backend
+     npm start
+     ```
+
+   - In another terminal:
+     ```powershell
+     cd frontend
+     npm start
+     ```
    - Access the application at http://localhost:3000
 
 For detailed installation instructions, refer to the [Transferring the Project to Another PC](#transferring-the-project-to-another-pc) section.
@@ -157,9 +170,10 @@ Follow these steps in sequence to ensure proper replication:
 - **Display**: 1366 x 768 pixels minimum resolution
 
 ### Required Software Versions
-1. **Node.js** | v18.17.1 or newer | [nodejs.org](https://nodejs.org/) 
+1. **Node.js** | v16.20.2 or newer | [nodejs.org](https://nodejs.org/) 
    - During installation, select "Automatically install the necessary tools"
    - After installation, verify with: `node -v` and `npm -v`
+   - The project has been tested with Node v16.20.2
 
 2. **SQL Server Express** | 2019 or newer | [microsoft.com/sql-server](https://www.microsoft.com/en-us/sql-server/sql-server-downloads)
    - Use "Basic" installation type
@@ -168,11 +182,6 @@ Follow these steps in sequence to ensure proper replication:
 
 3. **SQL Server Management Studio** | 18.10 or newer | [docs.microsoft.com/ssms](https://docs.microsoft.com/en-us/sql/ssms/download-sql-server-management-studio-ssms)
    - Install using default settings
-
-4. **Python** | 3.9.7 or newer | [python.org/downloads](https://www.python.org/downloads/)
-   - ⚠️ **IMPORTANT**: Check "Add Python to PATH" during installation
-   - Verify installation with: `python --version`
-   - Install required Python packages: `pip install pandas matplotlib pyodbc`
 
 5. **Git** | 2.33.0 or newer | [git-scm.com](https://git-scm.com/downloads)
    - Use default installation options
