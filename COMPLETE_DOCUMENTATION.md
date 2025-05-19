@@ -101,7 +101,7 @@ This section addresses common issues you might encounter with the AvevaEdge Dash
 
 | Problem | Solution |
 |---------|----------|
-| **Database connection errors** | • Verify SQL Server is running in Services<br>• Check server name in `.env` file<br>• Confirm SQL authentication is enabled<br>• Test credentials in SSMS |
+| **Database connection errors** | • Verify SQL Server is running in Services<br>• Check server name in `.env` file (use computer name WITHOUT backslash or instance)<br>• Confirm SQL authentication is enabled<br>• Test credentials in SSMS<br>• If you see "getaddrinfo ENOTFOUND", check your DB_SERVER format |
 | **"Table not found" errors** | • Verify database exists<br>• Check if schema initialization completed<br>• Review backend server logs |
 
 ### Frontend Issues
@@ -313,7 +313,7 @@ All database connection settings are now stored in a single file: `backend/.env`
    # Primary Database Connection Details
    DB_USER=Edge                        # Your database username
    DB_PASSWORD=F'yabdellah2025         # Your database password
-   DB_SERVER=YourPC\SQLEXPRESS         # Replace YourPC with your computer name
+   DB_SERVER=YourPC                    # Replace YourPC with your computer name (NO backslash or instance)
    DB_NAME=simulationDB                # Database name
    DB_INSTANCE=SQLEXPRESS              # SQL Server instance name
    DB_PORT=1433                        # Database port (usually 1433)
@@ -330,6 +330,10 @@ All database connection settings are now stored in a single file: `backend/.env`
    DB_POOL_MAX=10
    DB_POOL_MIN=0
    DB_POOL_IDLE_TIMEOUT=30000
+   
+   # BACKUP DATABASE CONFIGURATIONS - Used as fallbacks
+   BACKUP_DB_SERVER1=localhost
+   BACKUP_DB_SERVER2=127.0.0.1
    ```
 
 3. **Find your computer name** to use in the DB_SERVER setting:
@@ -337,6 +341,8 @@ All database connection settings are now stored in a single file: `backend/.env`
    $env:COMPUTERNAME
    ```
    Replace "YourPC" in the DB_SERVER setting with your actual computer name
+   
+   > ⚠️ **IMPORTANT**: Do not include the instance name (e.g., `\SQLEXPRESS`) in the DB_SERVER value. Use only your computer name. The application will combine the server name and instance automatically.
 
 
 ### Final Setup and Verification
