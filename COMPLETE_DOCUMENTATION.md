@@ -46,12 +46,19 @@ Before you begin, ensure you have administrator privileges on your PC and have i
 
 ## Setup Steps
 
-1. **Clone the Repository**:
-   ```powershell
-   cd C:\Users\YourUsername\Documents
-   git clone https://github.com/fyasser/avevaEdge.git
-   cd avevaEdge
-   ```
+1. **Get the Project Files**:
+   - **Option A**: Clone from GitHub:
+     ```powershell
+     cd C:\Users\YourUsername\Documents
+     git clone https://github.com/fyasser/avevaEdge.git
+     cd avevaEdge
+     ```
+   - **Option B**: Use the ZIP file:
+     ```powershell
+     # Extract the ZIP file
+     Expand-Archive -Path C:\path\to\AvevaEdge.zip -DestinationPath C:\Users\YourUsername\Documents
+     cd C:\Users\YourUsername\Documents\AvevaEdge
+     ```
 
 2. **Install Dependencies**:
    ```powershell
@@ -241,9 +248,13 @@ This section only highlights the exact versions of each technology used that wor
    npm install
    ```
 
-### Cloning the Repository
+### Getting the Project Files
 
-Before installing dependencies, you need to clone the project repository:
+You can obtain the project files using either of these two methods:
+
+#### Option 1: Clone from GitHub (Recommended for Development)
+
+If you have Git installed:
 
 1. **Open a terminal** (PowerShell) and navigate to where you want to install the project:
    ```powershell
@@ -258,6 +269,24 @@ Before installing dependencies, you need to clone the project repository:
 3. **Navigate to the project directory**:
    ```powershell
    cd avevaEdge
+   ```
+
+#### Option 2: Use a ZIP File
+
+If you have received a ZIP file of the project:
+
+1. **Copy the ZIP file** to the location where you want to install the project (e.g., `C:\Users\YourUsername\Documents`)
+
+2. **Extract the ZIP file**:
+   - Right-click on the ZIP file and select "Extract All..."
+   - Or use PowerShell:
+     ```powershell
+     Expand-Archive -Path .\AvevaEdge.zip -DestinationPath C:\Users\YourUsername\Documents
+     ```
+
+3. **Navigate to the project directory**:
+   ```powershell
+   cd C:\Users\YourUsername\Documents\AvevaEdge
    ```
 
 ### Database Configuration
